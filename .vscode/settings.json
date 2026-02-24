@@ -1,0 +1,24 @@
+{
+    "sqltools.connections": [
+        {
+            "mysqlOptions": {
+                "authProtocol": "default",
+                "enableSsl": "Disabled"
+            },
+            "ssh": "Disabled",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 3306,
+            "driver": "MySQL",
+            "name": "Local DB",
+            "username": "root",
+            "database": "mysql",
+            "askForPassword": true
+        }
+    ],
+    "files.watcherExclude": {
+        "**/target": true
+    },
+    "search.useGlobalIgnoreFiles": false,
+    "search.useParentIgnoreFiles": false
+}

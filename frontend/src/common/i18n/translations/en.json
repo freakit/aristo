@@ -1,0 +1,554 @@
+{
+  "common": {
+    "login": "Log In",
+    "loginInProgress": "Logging in...",
+    "signUp": "Sign Up",
+    "passwordChange": "Change Password",
+    "passwordLabel": "Password",
+    "passwordConfirmLabel": "Confirm Password",
+    "schoolLabel": "School",
+    "schoolPlaceholder": "e.g., KAIST",
+    "studentIdLabel": "Student ID",
+    "studentIdPlaceholder": "Enter your student ID",
+    "nameLabel": "Name",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone Number",
+    "submit": "Submit",
+    "confirm": "Confirm",
+    "errorTitle": "An Error Occurred",
+    "successTitle": "Success",
+    "genericError": "An error occurred while processing your request.",
+    "loginFailed": "Login failed.",
+    "loginError": "An error occurred during login.",
+    "logout": "Logout",
+    "cancel": "Cancel",
+    "continue": "Continue"
+  },
+  "studentLogin": {
+    "portalTitle": "ARISTO Student Portal",
+    "pageTitle": "Student Login",
+    "passwordPlaceholder": "Enter your password",
+    "schoolLabel": "School Name",
+    "schoolPlaceholder": "Enter school name, e.g., KAIST",
+    "studentIdPlaceholder": "Enter your student ID."
+  },
+  "signupModal": {
+    "title": "Student Sign Up",
+    "passwordMismatchError": "Passwords do not match.",
+    "consentError": "You must agree to all terms to sign up.",
+    "consentTerms": "I agree to the Terms of Service.",
+    "viewTerms": "(View Terms of Service)",
+    "consentPrivacy": "I agree to the Privacy Policy.",
+    "viewPrivacy": "(View Privacy Policy)",
+    "consentCollection": "I agree to the Consent to Collection and Use of Personal Information.",
+    "viewCollection": "(View Consent Form)",
+    "submitButton": "Sign Up",
+    "successTitle": "Sign Up Successful",
+    "successMessage": "Your account has been created. Please log in.",
+    "registrationSuspended": "Registration is suspended. Please contact the administrator."
+  },
+  "passwordChangeModal": {
+    "title": "Change Password",
+    "currentPasswordLabel": "Current Password",
+    "newPasswordLabel": "New Password",
+    "confirmNewPasswordLabel": "Confirm New Password",
+    "passwordMismatchError": "New passwords do not match.",
+    "submitButton": "Change",
+    "successMessage": "Your password has been changed successfully."
+  },
+  "landing": {
+    "teacherLogin": "Teacher Login",
+    "studentLogin": "Student Login",
+    "heroTitle": "The Future of Evaluation,<br />ARISTO.",
+    "heroSubtitle": "Go beyond simple testing with AI-driven deep analysis<br />and real-time feedback.",
+    "heroDescription": "A new dimension of AI evaluation platform that measures logical thinking and creativity,<br />breaking away from traditional correct-answer-finding assessments.",
+    "getStarted": "Get Started",
+    "teacherStart": "Start as Teacher",
+    "studentStart": "Start as Student",
+    "endorsementQuote": "ARISTO presents a new standard for future educational evaluation. It is the most innovative case showing how AI can be used as a tool to discover students' potential and help them grow.",
+    "endorsementName": "Prof. Jae-Seung Jeong",
+    "endorsementTitle": "Head, KAIST Dept. of Brain & Cognitive Sciences",
+    "featuresTitle": "Unrivaled Technology",
+    "featuresSubtitle": "Adding fairness and depth to evaluation with ARISTO's unique AI technology.",
+    "feature1Title": "Non-verbal Signal Analysis",
+    "feature1Desc": "Analyzes non-verbal signals such as gaze processing and facial expressions to evaluate confidence and attitude.",
+    "feature2Title": "Logic Structure Evaluation",
+    "feature2Desc": "Deeply analyzes the logical structure and causal relationships of speech, not just simple keyword matching.",
+    "feature3Title": "Context-based RAG Questions",
+    "feature3Desc": "Generates deep follow-up questions by understanding the context of the student's previous answers.",
+    "feature4Title": "Real-time Security/Proctoring",
+    "feature4Desc": "AI proctors detect cheating in real-time and ensure a safe evaluation environment.",
+    "feature5Title": "Multi-faceted Capability Report",
+    "feature5Desc": "Provides a comprehensive report that includes qualitative analysis as well as quantitative scores.",
+    "feature6Title": "Hyper-personalized Learning Path",
+    "feature6Desc": "Recommends personalized learning content to supplement weaknesses based on evaluation results.",
+    "techSpecsTitle": "Core Technology",
+    "techSpec1Value": "< 500ms",
+    "techSpec1Label": "Ultra-Low Latency",
+    "techSpec1Desc": "Seamless real-time interaction",
+    "techSpec2Value": "Multi-Modal",
+    "techSpec2Label": "Multi-Sensory Analysis",
+    "techSpec2Desc": "Voice, Gaze, and Emotion Analysis",
+    "techSpec3Value": "RAG Pipeline",
+    "techSpec3Label": "Context-Aware QA",
+    "techSpec3Desc": "Deep questions based on knowledge base",
+    "techSpec4Value": "Automated",
+    "techSpec4Label": "Instant Reporting",
+    "techSpec4Desc": "Detailed feedback generated immediately",
+    "ctaTitle": "Start the Evaluation Innovation",
+    "ctaDescription": "Inquire about adoption now or try the trial version.",
+    "secondaryButton": "Contact Sales",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "consent": "Data Collection Consent",
+    "about": "About Us",
+    "contact": "Contact",
+    "copyright": "© 2025 KAIST ARISTO. All rights reserved."
+  },
+  "teacherLogin": {
+    "title": "Login",
+    "emailPlaceholder": "Enter your email",
+    "passwordPlaceholder": "Enter your password",
+    "loginButton": "🔑 Log In",
+    "noAccount": "Don't have an account?"
+  },
+  "examList": {
+    "title": "Exam List",
+    "welcome": "Welcome, {{name}}.",
+    "headerTitle": "{{name}}'s Exam List",
+    "headerSubtitle": "{{school}} | Student ID: {{registrationNumber}}",
+    "logout": "Logout",
+    "loading": "Loading exam list...",
+    "errorTitle": "An Error Occurred",
+    "goBackToLogin": "Return to Login Page",
+    "readyTitle": "Ready for Exam",
+    "readyMessage": "Gaze tracking calibration may be required before starting.",
+    "welcomeTitle": "Available Exams",
+    "welcomeText": "Start your innovative learning experience with the AI voice assistant.",
+    "availableExams": "Available Exams",
+    "emptyTitle": "No Exams Available",
+    "emptyDescription": "There are currently no assigned exams.<br />Please contact your teacher.",
+    "emptyMessage": "There are no exams scheduled at this time.",
+    "progress": "Progress",
+    "completed": "Completed",
+    "upcoming": "Upcoming",
+    "expired": "Expired",
+    "start": "Start Exam",
+    "card": {
+      "type": "AI Voice-based Conversational Exam",
+      "duration": "Duration: {{duration}} min",
+      "statusLabel": "Status: ",
+      "status": {
+        "hidden": "Hidden",
+        "visible": "Waiting",
+        "open": "Available",
+        "blocked": "Blocked"
+      },
+      "openAt": " · Opens at {{time}}",
+      "action": {
+        "start": "Start Exam",
+        "notStarted": "Not Started Yet",
+        "unavailable": "Entry Closed"
+      }
+    },
+    "status": {
+      "active": "Active",
+      "completed": "Completed",
+      "upcoming": "Upcoming",
+      "expired": "Expired",
+      "open": "Available",
+      "visible": "Scheduled",
+      "hidden": "Hidden",
+      "blocked": "Blocked"
+    },
+    "calibration": {
+      "titleComplete": "✅ Gaze Calibration Complete",
+      "titleNeeded": "👁️ Gaze Calibration Required",
+      "descriptionComplete": "Gaze calibration is complete. You may now start the exam.",
+      "descriptionNeeded": "Gaze tracking calibration is required before starting the exam. Please proceed with calibration first.",
+      "recalibrate": "Recalibrate",
+      "start": "Start Calibration",
+      "needed": "Calibration Needed",
+      "complete": "Calibration Complete",
+      "required": "Calibration Required",
+      "requiredAlert": "Gaze calibration is required before starting the exam."
+    },
+    "errors": {
+      "invalidSession": "Invalid session information.",
+      "loadFailed": "Failed to load data.",
+      "invalidStudentInfo": "Invalid student information. Please log in again.",
+      "loadStudentInfoFailed": "Failed to load student information. Please log in again.",
+      "tokenExpired": "Session has expired. Please try again shortly.",
+      "tokenExpiredRefreshing": "Session has expired and is being renewed. Please wait.",
+      "unexpectedError": "An unexpected error occurred. Please try again.",
+      "tokenExpiredRetry": "Session was renewed. Please click the exam again.",
+      "refreshFailed": "Failed to refresh exam list."
+    }
+  },
+  "completionPage": {
+    "headerTitle": "Exam Completed",
+    "headerSubtitle": "{{examName}} | {{studentName}} ({{registrationNumber}})",
+    "statusTitle": "Your exam has been successfully completed!",
+    "statusText": "(Optional) If your professor requested additional files, please upload them and return to the exam list.",
+    "uploadSectionTitle": "Upload Additional Files (Optional)",
+    "uploadAreaTitle": "Select a File",
+    "uploadAreaDescription": "Upload any additional files requested by your professor.<br />Click or drag a file here to upload.",
+    "uploadingText": "Uploading... ({{progress}}%)",
+    "uploadButtonText": "Start Upload",
+    "changeFileButtonText": "Select a different file",
+    "uploadSuccess": "Upload completed successfully!",
+    "uploadFailed": "Upload failed: {{error}}",
+    "nextStepSectionTitle": "Next Steps",
+    "navigationButtonText": "Return to Exam List",
+    "navigationDescription": "The exam is finished.<br />You can take another exam or log out.",
+    "loadingData": "Loading data...",
+    "errors": {
+      "invalidAccess": "Invalid access. Please check the URL.",
+      "notFound": "Could not find exam or student information.",
+      "loadFailed": "An error occurred while loading data.",
+      "sasUrlFailed": "Failed to retrieve SAS URL.",
+      "unknownUploadError": "An unknown error occurred during upload."
+    }
+  },
+  "assistantPage": {
+    "skipTTSMessage": "Please skip if TTS doesn't work at all.",
+    "nextExamConfirm": "Complete current exam and move to next?",
+    "review": {
+      "title": "Misrecognition Correction",
+      "autoSubmitIn": "{{seconds}} seconds to auto-submit",
+      "edit": "Edit",
+      "cancelEdit": "Cancel Edit",
+      "submitNow": "Submit Now",
+      "saveAndSubmit": "Save & Submit",
+      "warning": "If the edited content differs from what was actually said, it may be considered cheating. \nPlease check the audio and only correct STT recognition errors.",
+      "pleaseSayAgain": "Please say again."
+    },
+    "scanningVoice": "Scanning your voice...",
+    "initialAIScript": "Preparing AI assistant...",
+    "pageLeaveWarning": "Leaving the page during the exam may be considered cheating. Are you sure you want to proceed?",
+    "setup": {
+      "screenShareError": "You must share your 'Entire Screen'.",
+      "screenShareAlert": "You must share your 'Entire Screen'.\nPlease refresh the page and try again.",
+      "audioShareError": "System audio sharing is not enabled. Please be sure to select the 'Share system audio' option.",
+      "audioShareAlert": "System audio sharing is not enabled.\nPlease be sure to select the 'Share system audio' option. Please refresh the page and try again.",
+      "permissionError": "Screen recording permission is required. Please refresh the page and grant permission.",
+      "permissionCancelled": "Screen sharing was cancelled. Please refresh the page and try again."
+    },
+    "errors": {
+      "invalidToken": "Invalid access. No access token in the URL.",
+      "examDetailsFailed": "Failed to load exam details.",
+      "examNotOpen": "This exam is not yet open. Open time: {{time}}",
+      "examBlocked": "Access to this exam is blocked. Blocked at: {{time}}",
+      "examHidden": "This exam has not started yet. Start time: {{time}}",
+      "attemptNotFound": "Could not find the ongoing exam information.",
+      "screenRecordingError": "An error occurred during screen recording.",
+      "initFailed": "An error occurred during initialization.",
+      "examOrStudentNotFound": "Exam or student information could not be found.",
+      "calibrationNotFound": "Calibration data not found. Please return to exam list and recalibrate.",
+      "finalizationError": "An error occurred while finalizing the exam. Please try again.",
+      "examInfoNotFound": "Error: Cannot find current exam information."
+    },
+    "loading": {
+      "title": "Preparing Exam Environment",
+      "subtitle": "Please wait a moment..."
+    },
+    "qaArea": {
+      "title": "Conversation History",
+      "emptyState": {
+        "title": "No conversation yet",
+        "description": "Conversation with AI will appear here once the exam starts"
+      },
+      "aiQuestionLabel": "AI Question",
+      "studentAnswerLabel": "My Answer"
+    },
+    "serverResponseLoading": {
+      "title": "Generating Response",
+      "subtitle": "ARISTO is generating a follow-up question. Please wait.",
+      "closeButton": "Close Loading",
+      "savingTitle": "Saving Answer",
+      "savingSubtitle": "Saving your final answer. Please wait."
+    },
+    "sttLoading": {
+      "title": "Voice Recognizing...",
+      "subtitle": "Converting voice to text."
+    },
+    "uploadOverlay": {
+      "title": "Submitting Exam Video",
+      "subtitle": "Do not leave this page. You will be redirected automatically upon completion.",
+      "screenRecording": "🖥️ Full Screen Recording"
+    },
+    "header": {
+      "nextExamButton": "Next Exam",
+      "lastExamButton": "Last Exam",
+      "endExamConfirm": "Are you sure you want to end the exam and submit the full screen recording? This action cannot be undone.",
+      "confirmMoveToNextExam": "Do you want to complete the current exam and move to the next exam?"
+    },
+
+    "phases": {
+      "IDLE": "Idle",
+      "SCREEN_SHARE_SETUP": "Setting up screen share",
+      "CAMERA_LOADING": "Loading camera",
+      "CAMERA_READY": "Camera ready",
+      "RECORDING_STARTED": "Ready to Start",
+      "FIRST_QUESTION_REQUESTED": "Requesting first question...",
+      "QUESTION_READING": "Reading Question",
+      "LISTENING": "Listening",
+      "READY_FOR_LISTEN": "Waiting for Answer",
+      "PROCESSING_ANSWER": "Processing Answer",
+      "GENERATING_QUESTION": "Generating Question",
+      "FINISHED": "Finished"
+    },
+    "assistantControls": {
+      "title": "ARISTO Assistant",
+      "statusLabel": "Status",
+      "skipTTS": "Skip AI voice (use if voice is stuck)",
+      "skipTTSButton": "Skip TTS",
+      "stopRecording": "Stop Recording",
+      "startRecording": "Start Checking",
+      "recordingInProgress": "Recording...",
+      "status": {
+        "initial": "Press the record button to start the exam.",
+        "finished": "The exam has ended!",
+        "error": "Error: {{error}}",
+        "waitingForServer": "AI is generating a response...",
+        "ttsPreparing": "Preparing AI voice output...",
+        "ttsSpeaking": "AI is reading the question... Do NOT speak during TTS output!",
+        "vadListening": "Listening... Auto-submit after 5s silence",
+        "vadWaitingForRecording": "AI will start when cheating-detection recording begins.",
+        "vadSilence": "Please speak your answer.",
+        "vadReady": "Ready to start interview.",
+        "startExam": "Start Exam",
+        "startFirstQuestion": "Start First Question",
+        "recording": "Recording... Press again to submit.",
+        "ready": "Press the mic to record your answer."
+      }
+    },
+    "vad": {
+      "listening": "Listening!",
+      "notListening": "Not detecting..."
+    },
+    "warnings": {
+      "externalAudio": "⚠️ External audio detected. Please mute all unnecessary sound sources."
+    },
+    "sessionEnd": {
+      "message": "All exams have ended. Please stop the recording immediately, upload the video, and then click the 'End Exam' button. Good work.",
+      "nextExamMessage": "This exam has ended. Please proceed to the next exam."
+    },
+    "alreadyCompleted": "This exam has already been completed."
+  },
+  "apiErrors": {
+    "login_failed": "Login failed.",
+    "force_login_failed": "Forced login failed.",
+    "signup_failed": "Signup failed.",
+    "password_change_failed": "Password change failed.",
+    "student_list_fetch_failed": "Failed to fetch student list.",
+    "student_exists_check_failed": "Failed to check if student exists.",
+    "student_info_fetch_failed": "Failed to fetch student information.",
+    "exam_list_fetch_failed": "Failed to fetch exam list.",
+    "exams_for_student_fetch_failed": "Failed to fetch exams for the student.",
+    "exam_info_fetch_failed": "Failed to fetch exam information.",
+    "tracking_update_failed": "Failed to update tracking event.",
+    "tracking_log_add_failed": "Failed to add tracking log.",
+    "session_info_fetch_failed": "Failed to fetch exam session information.",
+    "attempt_info_fetch_failed": "Failed to fetch attempt information.",
+    "attempt_start_failed": "Failed to start the exam.",
+    "attempt_save_failed": "Failed to save attempt information.",
+    "tree_init_failed": "Failed to initialize tree.",
+    "node_add_failed": "Failed to add node.",
+    "qa_list_fetch_failed": "Failed to fetch Q&A list.",
+    "answer_update_failed": "Failed to update answer.",
+    "sas_url_fetch_failed": "Failed to retrieve SAS URL.",
+    "file_record_save_failed": "Failed to save file information.",
+    "sttFailed": "STT API call failed.",
+    "generic": "An unknown error occurred."
+  },
+  "speechService": {
+    "errors": {
+      "connectionFailed": "Failed to connect to the service.",
+      "notConnected": "Service is not connected.",
+      "noNextQuestion": "Could not get the next question from the AI. Please refresh the page.",
+      "requestNextQuestionFailed": "An error occurred while requesting the next question.",
+      "ttsGenerationFailed": "Failed to generate TTS audio.",
+      "ttsRequestFailed": "An error occurred during the TTS request.",
+      "sttFailed": "Speech recognition failed.",
+      "micAccessFailed": "Failed to access microphone. Please check permissions.",
+      "vadInitFailed": "Failed to access microphone or initialize VAD.",
+      "sttConversionFailed": "An error occurred during audio conversion."
+    },
+    "sessionEndMessage": "The exam has ended. Please stop the recording immediately, upload and save the video, then click the 'End Exam' button. Good work.",
+    "sessionRecovery": "Internet connection lost. Attempting to reconnect. Once connected, this question will restart from the beginning."
+  },
+  "authHook": {
+    "concurrentLogoutAlert": "You have been automatically logged out because another device signed in.",
+    "statusCheckError": "Error while checking login status:"
+  },
+  "authContext": {
+    "useAuthError": "useAuth must be used within an AuthProvider",
+    "testUserName": "Test User",
+    "testUserRole": "Admin",
+    "loginError": "The email or password does not match."
+  },
+  "setupModal": {
+    "title": "📝 Exam Environment Setup Guide",
+    "sharingTitle": "☝️ Full Screen Sharing",
+    "mac": {
+      "description": "On a Mac, you must select <strong>'Entire Screen'</strong> when sharing. You may also be separately prompted to <strong>allow microphone access</strong>.",
+      "noteTitle": "📝 Important for Mac Users:",
+      "noteItem1": "In the screen share dialog, be sure to select <strong>'Entire Screen'</strong>",
+      "noteItem2": "Please <strong>Allow</strong> when the browser requests microphone access"
+    },
+    "windows": {
+      "description": "Please follow the prompts to select <strong>'Entire Screen'</strong> and if the button below does not become active within 1 minute, please perform a <strong>'Refresh (F5)'</strong>"
+    },
+    "errorPrefix": "Error:",
+    "buttons": {
+      "reload": "Reload Page",
+      "checking": "Checking environment...",
+      "cameraLoading": "Camera Loading...",
+      "confirm": "I have read and confirmed the above"
+    }
+  },
+  "protectedRoute": {
+    "loadingText": "Checking authentication status..."
+  },
+  "header": {
+    "brandSubtitle": "AI-powered Real-time Interactive Speaking Tutor & Orchestrator",
+    "nav": {
+      "home": "Home",
+      "exams": "Exams",
+      "students": "Students",
+      "torpedo": "Torpedo",
+      "records": "Recordings"
+    },
+    "logout": "Logout",
+    "logoutError": "Logout error:"
+  },
+  "trackingModal": {
+    "errors": {
+      "initFailed": "Component initialization failed:",
+      "scriptLoadFailed": "Failed to load script:",
+      "videoElementNotFound": "Video element not found.",
+      "recordingSetupFailed": "Could not prepare for recording.",
+      "recordingStartFailed": "Could not start recording.",
+      "noRecordingData": "No recorded data available.",
+      "uploadFailed": "Upload failed: {{message}}",
+      "unknownUploadError": "An unknown error occurred during upload.",
+      "sasUrlFetchFailed": "Failed to retrieve SAS URL.",
+      "calibrationCancelled": "Calibration was cancelled. You can start again.",
+      "calibrationSampleShortage": "Calibration failed: Insufficient samples ({{collected}}/{{required}})",
+      "calibrationLowQuality": "Calibration quality is low (Avg. Error: {{error}}px). Please try again.",
+      "mediaPipeTimeout": "Failed to load camera tracking module. Please reset camera permissions in browser settings and refresh the page."
+    },
+    "status": {
+      "loading": "Loading camera and models...",
+      "error": "An error occurred",
+      "gazeIdle": "Awaiting gaze tracking",
+      "gazeCalibrating": "Calibrating...",
+      "gazeTracking": "Tracking active",
+      "handCount": "Hands: {{count}}",
+      "examNotStarted": "The exam has not started yet.",
+      "mediaPipeInit": "Initializing tracking module..."
+    },
+    "controls": {
+      "startRecording": "Start Cheat Recording",
+      "stopRecording": "Stop Recording",
+      "stopRecordingDisabledTooltip": "Recording can only be stopped after the exam has finished.",
+      "startCalibration": "Calibrate Gaze",
+      "useSavedCalibration": "Use Saved Calibration",
+      "recalibrate": "Recalibrate",
+      "upload": "Upload Video",
+      "uploading": "Uploading...",
+      "uploadSuccess": "Upload Complete",
+      "uploadError": "Upload Failed"
+    },
+    "warnings": {
+      "title": "Activity suspected of cheating has been detected.",
+      "confirm": "Confirm"
+    },
+    "calibration": {
+      "stopRecordingConfirm": "Has the exam finished? Please ensure you only stop recording after the exam is complete.",
+      "statsCollected": "Collected: {{collected}} / {{required}} (min)",
+      "statsPoints": "Point: {{current}} / {{total}}",
+      "cancelButton": "Cancel",
+      "phaseTransition": "Moving to the next point...",
+      "phaseCollecting": "Please look directly at the red dot.",
+      "lookAtDot": "Please look at the red dot."
+    },
+    "calibrationChoice": {
+      "title": "Previous Calibration Data Found",
+      "description": "Previous gaze calibration data is available. Would you like to use it?",
+      "useSaved": "Use Saved Calibration",
+      "startNew": "Start New Calibration"
+    },
+    "cancelConfirm": {
+      "title": "Cancel calibration?",
+      "description": "All progress will be lost.",
+      "message": "All progress will be lost. Are you sure you want to stop?",
+      "confirm": "Cancel",
+      "cancel": "Continue"
+    },
+    "setup": {
+      "deviceNotSupported": "Tablets and mobile devices are not supported. Please access from a PC."
+    },
+    "unsupportedDevice": {
+      "title": "Unsupported Environment",
+      "subtitle": "Device Error",
+      "explanation": "This exam requires full screen recording, which is not available on tablets or mobile devices.",
+      "instructionBold": "Please use a Chrome browser on a desktop or laptop",
+      "instructionNormal": " to connect again."
+    },
+    "auth": {
+      "notProfessorAccount": "This is not a professor's account."
+    }
+  },
+  "examDetail": {
+    "addStudentError": "An error occurred while adding a student."
+  },
+  "examSetShell": {
+    "completeSectionFirst": "Please complete the current section before moving to another section.",
+    "startExamAndRecordingFirst": "Please start 'Exam Set' first, then start 'Camera Recording'.",
+    "mustShareFullScreen": "You must share your full screen.",
+    "screenRecordingPermissionRequired": "Screen recording permission is required.",
+    "recordingSaveError": "An error occurred while saving the recording.",
+    "webcamUploadPending": "Webcam recording has not been uploaded yet. Please wait a moment.",
+    "examEndError": "An error occurred while ending the exam.",
+    "confirmStopRecording": "Do you want to stop recording?",
+    "confirmEndExamSet": "Do you want to completely end the exam set?"
+  },
+  "studentForm": {
+    "selectCSVFile": "Please select a CSV file.",
+    "uploadError": "An error occurred during upload.",
+    "csvParseError": "An error occurred while parsing the CSV file."
+  },
+  "studentList": {
+    "studentDetailComingSoon": "Student detail page (Coming soon)"
+  },
+  "examReview": {
+    "reportGenerationFailed": "Failed to generate report. Please try again."
+  },
+  "examSetShellUI": {
+    "startInstruction": "Press the button below to start the exam set. (Camera/screen recording will begin)",
+    "startButton": "Start Exam Set",
+    "selectSection": "Please select a section from the list on the left.",
+    "sections": "Sections",
+    "availableExams": "Available Exams",
+    "screenRecordingSaving": "Saving screen recording...",
+    "cameraUploadWaiting": "Waiting for camera upload...",
+    "endExamStopRecording": "End Exam (Stop Recording)",
+    "endExamSet": "End Exam Set",
+    "finishSet": "Finish Exam Set",
+    "confirmFinish": "Confirm Finish",
+    "videoUploading": "Uploading video..."
+  },
+  "examCard": {
+    "continue": "Continue",
+    "start": "Start",
+    "sections": " Sections"
+  },
+  "surveyModal": {
+    "title": "Your Feedback Matters!",
+    "description": "Thank you for completing the exam! We would love to hear your thoughts and feedback. Your input helps us improve the testing experience for everyone.",
+    "participate": "Take Survey",
+    "skip": "Maybe Later"
+  }
+}
