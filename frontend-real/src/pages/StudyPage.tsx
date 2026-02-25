@@ -1,60 +1,47 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
+import { useLocation } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/Button'
 import { Card, CardHeader, CardTitle, PageLayout, PageTitle, Badge } from '../components/Card'
 import { theme } from '../styles/theme'
-import type { Lesson, StudyGoal } from './AimPage'
+import { api, openTutorWS } from '../lib/api'
+import type { SessionInfo } from './AimPage'
 
-// ---- API (ready for integration) ----
-const API_BASE = ''
-export const startSession = async (lessonId: string): Promise<{ sessionId: string; firstQuestion: string }> => {
-  const res = await fetch(`${API_BASE}/api/session/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lessonId }) })
-  return res.json()
+// ---- API Types ----
+interface SessionSummary {
+  sessionId: string
+  title: string
+  status: string
+  createdAt: string
 }
-export const submitAnswer = async (sessionId: string, audioBlob: Blob): Promise<{ nextQuestion: string | null; completedGoals: string[]; feedback: string }> => {
-  const form = new FormData()
-  form.append('session_id', sessionId)
-  form.append('audio', audioBlob, 'answer.webm')
-  const res = await fetch(`${API_BASE}/api/session/answer`, { method: 'POST', body: form })
-  return res.json()
+
+interface Message {
+  msgId: string
+  role: 'user' | 'assistant'
+  content: string
+  turn: number
+  createdAt: string
 }
-// -------------------------------------
+
+interface SessionDetail {
+  sessionId: string
+  title: string
+  status: string
+  vectorDocIds: string[]
+  messages: Message[]
+}
+
+// WebSocket message types from server
+interface WsChunk { type: 'CHUNK'; content: string; turn: number }
+interface WsDone { type: 'DONE'; msgId: string; turn: number }
+interface WsError { type: 'ERROR'; message: string }
+type WsMessage = WsChunk | WsDone | WsError
+// -------------------
 
 const pulse = keyframes`0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.08);opacity:0.7}`
 const ripple = keyframes`0%{transform:scale(0.9);opacity:0.5}100%{transform:scale(1.9);opacity:0}`
-
-const MOCK_LESSONS: Lesson[] = [
-  {
-    id: 'lesson-001',
-    title: 'Data Structures — Foundations',
-    files: ['lecture_01_data_structures.pdf'],
-    mode: 'basic',
-    createdAt: '2025-05-01T09:00:00Z',
-    goals: [
-      { id: 'g1', text: 'Explain the structural difference between arrays and linked lists, and how each allocates memory.', questions: ['Why is array indexing O(1)?', 'Why is mid-list insertion more efficient in a linked list?', 'What distinguishes a static from a dynamic array?'] },
-      { id: 'g2', text: 'Understand how stacks and queues work and describe real-world use cases.', questions: ['Explain LIFO vs FIFO with examples.', 'Describe the relationship between recursion and the call stack.', 'Why is a queue used in BFS?'] },
-      { id: 'g3', text: 'Correctly define core tree terminology: root, leaf, depth, and height.', questions: ['Difference between a complete and perfect binary tree?', 'Compare DFS and BFS in trees.', 'What makes BST search O(log n)?'] },
-    ],
-  },
-  {
-    id: 'lesson-002',
-    title: 'Algorithm Complexity Analysis',
-    files: ['lecture_02_algorithms.pdf', 'lecture_03_complexity.pdf'],
-    mode: 'applied',
-    createdAt: '2025-05-02T14:00:00Z',
-    goals: [
-      { id: 'g4', text: 'Explain Big-O notation and major complexity classes.', questions: ['Practical difference between O(n log n) and O(n²)?', 'Explain the space-time complexity tradeoff.', 'Why analyze worst, average, and best cases separately?'] },
-      { id: 'g5', text: 'Compare sorting algorithms and choose appropriately by situation.', questions: ['Why is Quicksort faster on average than Merge Sort?', 'Give a use case where a stable sort is required.', 'What is the space complexity advantage of Heap Sort?'] },
-    ],
-  },
-]
-
-const MOCK_QUESTIONS = [
-  'Please explain why array indexing is O(1) from a memory perspective.',
-  'Good. Now, how does a dynamic array handle the complexity issue when appending elements?',
-  'Give an example of a situation where a linked list would be preferable to an array.',
-]
+const spin = keyframes`from { transform: rotate(0deg) } to { transform: rotate(360deg) }`
 
 const LessonGrid = styled.div`
   display: grid;
@@ -99,48 +86,45 @@ const GoalSidebar = styled.div`
   top: 80px;
 `
 
-const GoalItem = styled.div<{ completed: boolean }>`
+const ChatMessage = styled.div<{ role: 'user' | 'assistant' }>`
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: ${theme.radii.md};
-  border: 1px solid ${(p: any) => p.completed ? 'rgba(22,163,74,0.25)' : theme.colors.border};
-  background: ${(p: any) => p.completed ? 'rgba(22,163,74,0.04)' : 'transparent'};
-  margin-bottom: 7px;
-  transition: all 0.3s;
+  flex-direction: column;
+  align-items: ${(p: any) => p.role === 'user' ? 'flex-end' : 'flex-start'};
+  margin-bottom: 12px;
 `
 
-const GoalCheckCircle = styled.div<{ completed: boolean }>`
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  border: 1.5px solid ${(p: any) => p.completed ? theme.colors.success : theme.colors.border};
-  background: ${(p: any) => p.completed ? theme.colors.success : 'transparent'};
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; font-size: 10px; color: #fff;
-  transition: all 0.3s; margin-top: 1px;
+const ChatBubble = styled.div<{ role: 'user' | 'assistant' }>`
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: ${(p: any) => p.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px'};
+  font-size: 14px;
+  line-height: 1.65;
+  background: ${(p: any) => p.role === 'user' ? theme.colors.accent : theme.colors.bgCard};
+  color: ${(p: any) => p.role === 'user' ? '#fff' : theme.colors.textPrimary};
+  border: 1px solid ${(p: any) => p.role === 'user' ? 'transparent' : theme.colors.border};
 `
 
-const GoalItemText = styled.p<{ completed: boolean }>`
-  font-size: 12px;
-  color: ${(p: any) => p.completed ? theme.colors.textMuted : theme.colors.textSecondary};
-  line-height: 1.5;
-  text-decoration: ${(p: any) => p.completed ? 'line-through' : 'none'};
+const ChatRoleLabel = styled.span`
+  font-size: 10px;
+  color: ${theme.colors.textMuted};
+  font-family: ${theme.fonts.mono};
+  margin-bottom: 4px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+`
+
+const ChatWindow = styled.div`
+  height: 380px;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
 `
 
 const MainPanel = styled.div`
   display: flex;
   flex-direction: column;
   gap: 14px;
-`
-
-const QuestionBox = styled.div`
-  padding: 28px 32px;
-  border: 1px solid ${theme.colors.border};
-  border-radius: ${theme.radii.lg};
-  background: ${theme.colors.bgCard};
-  min-height: 130px;
-  position: relative;
 `
 
 const QLabel = styled.div`
@@ -160,15 +144,6 @@ const SpeakerDot = styled.span<{ active: boolean }>`
   border-radius: 50%;
   background: ${(p: any) => p.active ? theme.colors.accent : theme.colors.textMuted};
   animation: ${(p: any) => p.active ? pulse : 'none'} 1.2s ease infinite;
-`
-
-const QuestionText = styled.p`
-  font-size: 18px;
-  font-weight: 400;
-  color: ${theme.colors.textPrimary};
-  line-height: 1.65;
-  letter-spacing: -0.01em;
-  font-family: ${theme.fonts.display};
 `
 
 const ControlPanel = styled.div`
@@ -224,22 +199,6 @@ const ControlSub = styled.p`
   font-family: ${theme.fonts.mono};
 `
 
-const InlineBox = styled.div<{ variant?: 'feedback' }>`
-  padding: 18px 20px;
-  background: ${(p: any) => p.variant === 'feedback' ? 'rgba(22,163,74,0.06)' : theme.colors.bgCard};
-  border: 1px solid ${(p: any) => p.variant === 'feedback' ? 'rgba(22,163,74,0.2)' : theme.colors.border};
-  border-radius: ${theme.radii.lg};
-`
-
-const InlineLabel = styled.div<{ variant?: 'feedback' }>`
-  font-size: 10px;
-  color: ${(p: any) => p.variant === 'feedback' ? theme.colors.successLight : theme.colors.textMuted};
-  font-family: ${theme.fonts.mono};
-  margin-bottom: 7px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-`
-
 const ProgressBadge = styled.div`
   display: flex;
   align-items: center;
@@ -264,20 +223,84 @@ const EmptyState = styled.div`
   text-align: center;
 `
 
+const SpinnerIcon = styled.div`
+  width: 20px; height: 20px;
+  border: 2px solid ${theme.colors.border};
+  border-top-color: ${theme.colors.accent};
+  border-radius: 50%;
+  animation: ${spin} 0.7s linear infinite;
+`
+
+const ErrorMsg = styled.p`
+  font-size: 13px;
+  color: ${theme.colors.error};
+`
+
 export const StudyPage: React.FC = () => {
-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
+  const location = useLocation()
+  const incomingSession = (location.state as { session?: SessionInfo } | null)?.session ?? null
+
+  const [sessions, setSessions] = useState<SessionSummary[]>([])
+  const [sessionsLoading, setSessionsLoading] = useState(true)
+  const [sessionsError, setSessionsError] = useState('')
+
+  const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(false)
+
   const [sessionStarted, setSessionStarted] = useState(false)
   const [recording, setRecording] = useState(false)
   const [waiting, setWaiting] = useState(false)
-  const [qIndex, setQIndex] = useState(0)
-  const [completedGoals, setCompletedGoals] = useState<string[]>([])
-  const [transcript, setTranscript] = useState('')
-  const [feedback, setFeedback] = useState('')
   const [ttsActive, setTtsActive] = useState(false)
+  const [streamingText, setStreamingText] = useState('')
+  const [currentTurn, setCurrentTurn] = useState(0)
+  const [wsError, setWsError] = useState('')
+
+  const wsRef = useRef<WebSocket | null>(null)
   const mediaRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const chatEndRef = useRef<HTMLDivElement>(null)
 
-  const allDone = selectedLesson ? completedGoals.length >= selectedLesson.goals.length : false
+  // AimPage에서 세션 state로 전달된 경우 즉시 로드
+  const vectorKeysRef = useRef<string[]>(incomingSession?.vectorKeys ?? [])
+
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true)
+    setSessionsError('')
+    try {
+      const data = await api.get<SessionSummary[]>('/sessions')
+      setSessions(data)
+    } catch (err: any) {
+      setSessionsError(`Failed to load sessions: ${err.message}`)
+    } finally {
+      setSessionsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchSessions() }, [fetchSessions])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [selectedSession?.messages, streamingText])
+
+  const loadSession = useCallback(async (sessionId: string, vectorKeys?: string[]) => {
+    setSessionLoading(true)
+    try {
+      const detail = await api.get<SessionDetail>(`/sessions/${sessionId}`)
+      setSelectedSession(detail)
+      if (vectorKeys) vectorKeysRef.current = vectorKeys
+    } catch (err: any) {
+      setSessionsError(`Failed to load session: ${err.message}`)
+    } finally {
+      setSessionLoading(false)
+    }
+  }, [])
+
+  // AimPage에서 넘어온 세션 자동 로드
+  useEffect(() => {
+    if (incomingSession) {
+      loadSession(incomingSession.sessionId, incomingSession.vectorKeys)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const playTTS = (text: string) => {
     if (!('speechSynthesis' in window)) return
@@ -289,10 +312,68 @@ export const StudyPage: React.FC = () => {
     window.speechSynthesis.speak(u)
   }
 
+  const appendMessage = (msg: Message) => {
+    setSelectedSession(prev => {
+      if (!prev) return prev
+      return { ...prev, messages: [...prev.messages, msg] }
+    })
+  }
+
+  const connectWS = useCallback((sessionId: string) => {
+    const ws = openTutorWS()
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        type: 'START',
+        sessionId,
+        vectorKeys: vectorKeysRef.current,
+      }))
+      setCurrentTurn(0)
+    }
+
+    ws.onmessage = (e) => {
+      try {
+        const msg: WsMessage = JSON.parse(e.data)
+
+        if (msg.type === 'CHUNK') {
+          setStreamingText(prev => prev + msg.content)
+        } else if (msg.type === 'DONE') {
+          // 스트리밍 완료 → 메시지로 고정
+          setStreamingText(prev => {
+            const full = prev
+            if (full) {
+              appendMessage({
+                msgId: msg.msgId,
+                role: 'assistant',
+                content: full,
+                turn: msg.turn,
+                createdAt: new Date().toISOString(),
+              })
+              playTTS(full)
+            }
+            return ''
+          })
+          setCurrentTurn(msg.turn + 1)
+          setWaiting(false)
+        } else if (msg.type === 'ERROR') {
+          setWsError(msg.message)
+          setWaiting(false)
+        }
+      } catch {
+        // 무시
+      }
+    }
+
+    ws.onerror = () => { setWsError('WebSocket connection error.') }
+    ws.onclose = () => { wsRef.current = null }
+  }, [])
+
   const handleStart = async () => {
-    setSessionStarted(true); setQIndex(0); setCompletedGoals([]); setTranscript(''); setFeedback('')
-    await new Promise(r => setTimeout(r, 300))
-    playTTS(MOCK_QUESTIONS[0])
+    if (!selectedSession) return
+    setSessionStarted(true)
+    setStreamingText('')
+    connectWS(selectedSession.sessionId)
   }
 
   const handleMic = async () => {
@@ -302,58 +383,105 @@ export const StudyPage: React.FC = () => {
         const mr = new MediaRecorder(stream)
         chunksRef.current = []
         mr.ondataavailable = e => chunksRef.current.push(e.data)
+
         mr.onstop = async () => {
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
           stream.getTracks().forEach(t => t.stop())
-          setWaiting(true); setTranscript('[Transcribing...]')
-          await new Promise(r => setTimeout(r, 1500))
-          const mockTx = 'An array stores elements in contiguous memory, so given any index you can compute the address directly via a base-pointer plus offset — that\'s a single operation, hence O(1).'
-          setTranscript(mockTx)
-          await new Promise(r => setTimeout(r, 800))
-          let newGoals: string[] = []
-          if (qIndex === 0) {
-            newGoals = ['g1']
-            setFeedback('Correct! You identified contiguous memory and offset calculation. Goal 1 achieved.')
+          setWaiting(true)
+
+          // blob → base64
+          const reader = new FileReader()
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1]
+            // 사용자 turn 메시지 추가 (오디오 제출 표시)
+            appendMessage({
+              msgId: `user-${Date.now()}`,
+              role: 'user',
+              content: '[Voice Answer Submitted]',
+              turn: currentTurn,
+              createdAt: new Date().toISOString(),
+            })
+            // WebSocket으로 오디오 전송
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({
+                type: 'INPUT',
+                audioChunk: base64,
+                turn: currentTurn,
+              }))
+            }
           }
-          if (newGoals.length) setCompletedGoals(prev => [...prev, ...newGoals])
-          const nextQ = MOCK_QUESTIONS[qIndex + 1]
-          if (nextQ) {
-            await new Promise(r => setTimeout(r, 700))
-            setQIndex(i => i + 1); setWaiting(false); playTTS(nextQ)
-          } else { setWaiting(false) }
+          reader.readAsDataURL(blob)
         }
-        mr.start(); mediaRef.current = mr; setRecording(true)
-      } catch { alert('Microphone permission is required.') }
+
+        mr.start()
+        mediaRef.current = mr
+        setRecording(true)
+      } catch {
+        alert('Microphone permission is required.')
+      }
     } else {
-      mediaRef.current?.stop(); setRecording(false)
+      mediaRef.current?.stop()
+      setRecording(false)
     }
   }
 
-  if (!selectedLesson) {
+  const handleEndSession = async () => {
+    if (!selectedSession) return
+    // WebSocket 종료
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'END' }))
+      wsRef.current.close()
+    }
+    // 세션 종료 API
+    try {
+      await api.patch(`/sessions/${selectedSession.sessionId}/end`)
+    } catch {
+      // 무시
+    }
+    window.speechSynthesis?.cancel()
+    setSelectedSession(null)
+    setSessionStarted(false)
+    setStreamingText('')
+    setRecording(false)
+    setWaiting(false)
+    setWsError('')
+    await fetchSessions()
+  }
+
+  // 세션 목록 화면
+  if (!selectedSession) {
     return (
       <>
         <AppHeader />
         <PageLayout>
           <PageTitle>Study</PageTitle>
           <p style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 28 }}>
-            Choose a lesson generated from your goals and start your AI tutoring session.
+            Choose a tutoring session to continue, or go to Set Goals to create a new one.
           </p>
-          {MOCK_LESSONS.length === 0 ? (
+
+          {sessionsLoading || sessionLoading ? (
+            <EmptyState>
+              <SpinnerIcon />
+              <p style={{ fontSize: 13, color: theme.colors.textMuted }}>Loading sessions...</p>
+            </EmptyState>
+          ) : sessionsError ? (
+            <ErrorMsg>{sessionsError}</ErrorMsg>
+          ) : sessions.length === 0 ? (
             <EmptyState>
               <div style={{ fontSize: 32 }}>📚</div>
-              <p style={{ fontSize: 14, color: theme.colors.textSecondary }}>No lessons yet. Go to Set Goals to create one.</p>
+              <p style={{ fontSize: 14, color: theme.colors.textSecondary }}>No sessions yet. Go to Set Goals to create one.</p>
             </EmptyState>
           ) : (
             <LessonGrid>
-              {MOCK_LESSONS.map(l => (
-                <LessonCard key={l.id} onClick={() => setSelectedLesson(l)}>
-                  <LessonTitle>{l.title}</LessonTitle>
+              {sessions.map(s => (
+                <LessonCard key={s.sessionId} onClick={() => loadSession(s.sessionId)}>
+                  <LessonTitle>{s.title}</LessonTitle>
                   <LessonMeta>
-                    <Badge color={l.mode === 'basic' ? 'blue' : 'yellow'}>{l.mode === 'basic' ? 'Conceptual' : 'Applied'}</Badge>
-                    <Badge>{l.goals.length} goals</Badge>
+                    <Badge color={s.status === 'active' ? 'green' : 'blue'}>{s.status}</Badge>
                   </LessonMeta>
-                  <p style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>{l.files.join(', ')}</p>
-                  <p style={{ fontSize: 11, color: theme.colors.textMuted, fontFamily: theme.fonts.mono }}>{new Date(l.createdAt).toLocaleDateString('en-US')}</p>
+                  <p style={{ fontSize: 11, color: theme.colors.textMuted, fontFamily: theme.fonts.mono }}>
+                    {new Date(s.createdAt).toLocaleDateString('ko-KR')}
+                  </p>
                 </LessonCard>
               ))}
             </LessonGrid>
@@ -363,35 +491,39 @@ export const StudyPage: React.FC = () => {
     )
   }
 
-  const currentQ = MOCK_QUESTIONS[qIndex] ?? null
+  const messages = selectedSession.messages
 
   return (
     <>
       <AppHeader />
       <PageLayout>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <Button variant="ghost" size="sm" onClick={() => { setSelectedLesson(null); setSessionStarted(false); window.speechSynthesis?.cancel() }}>
+          <Button variant="ghost" size="sm" onClick={handleEndSession}>
             ← Back
           </Button>
-          <PageTitle style={{ marginBottom: 0 }}>{selectedLesson.title}</PageTitle>
+          <PageTitle style={{ marginBottom: 0 }}>{selectedSession.title}</PageTitle>
           <ProgressBadge>
-            {completedGoals.length} / {selectedLesson.goals.length} complete
+            <Badge color={selectedSession.status === 'active' ? 'green' : 'blue'}>{selectedSession.status}</Badge>
           </ProgressBadge>
         </div>
 
         <SessionLayout>
           <GoalSidebar>
             <Card padding="14px">
-              <CardHeader><CardTitle>Learning Goals</CardTitle></CardHeader>
-              {selectedLesson.goals.map(g => {
-                const done = completedGoals.includes(g.id)
-                return (
-                  <GoalItem key={g.id} completed={done}>
-                    <GoalCheckCircle completed={done}>{done && '✓'}</GoalCheckCircle>
-                    <GoalItemText completed={done}>{g.text}</GoalItemText>
-                  </GoalItem>
-                )
-              })}
+              <CardHeader><CardTitle>Session Info</CardTitle></CardHeader>
+              <div style={{ fontSize: 11, color: theme.colors.textMuted, fontFamily: theme.fonts.mono, lineHeight: 1.8 }}>
+                <div>ID: {selectedSession.sessionId.slice(0, 12)}...</div>
+                <div>Messages: {messages.length}</div>
+                <div>Sources: {selectedSession.vectorDocIds.length}</div>
+              </div>
+
+              {sessionStarted && (
+                <div style={{ marginTop: 14 }}>
+                  <Button variant="secondary" size="sm" fullWidth onClick={handleEndSession}>
+                    End Session
+                  </Button>
+                </div>
+              )}
             </Card>
           </GoalSidebar>
 
@@ -400,70 +532,93 @@ export const StudyPage: React.FC = () => {
               <Card>
                 <div style={{ padding: '40px', textAlign: 'center' }}>
                   <div style={{ fontSize: 40, marginBottom: 18 }}>🎙️</div>
-                  <p style={{ fontSize: 16, color: theme.colors.textPrimary, marginBottom: 8, fontWeight: 500 }}>Ready to start your tutoring session?</p>
-                  <p style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 32 }}>
-                    The AI tutor will ask questions via text-to-speech. Press the mic button to answer.
+                  <p style={{ fontSize: 16, color: theme.colors.textPrimary, marginBottom: 8, fontWeight: 500 }}>
+                    Ready to start your tutoring session?
                   </p>
-                  <Button variant="primary" size="lg" onClick={handleStart}>Start Session</Button>
-                </div>
-              </Card>
-            ) : allDone ? (
-              <Card>
-                <div style={{ padding: '40px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 48, marginBottom: 14 }}>🎉</div>
-                  <p style={{ fontSize: 20, fontWeight: 600, color: theme.colors.textPrimary, marginBottom: 8 }}>All Goals Achieved!</p>
                   <p style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 32 }}>
-                    You completed all {selectedLesson.goals.length} learning goals.
+                    The AI tutor will ask questions via text. Press the mic button to answer with your voice.
                   </p>
-                  <Button variant="primary" size="lg" onClick={() => { setSelectedLesson(null); setSessionStarted(false) }}>
-                    End Session
+
+                  {/* 기존 메시지 히스토리 표시 */}
+                  {messages.length > 0 && (
+                    <div style={{ textAlign: 'left', marginBottom: 24 }}>
+                      <p style={{ fontSize: 12, color: theme.colors.textMuted, fontFamily: theme.fonts.mono, marginBottom: 8 }}>
+                        Previous messages ({messages.length})
+                      </p>
+                      <ChatWindow style={{ height: 200, border: `1px solid ${theme.colors.border}`, borderRadius: theme.radii.md }}>
+                        {messages.map(m => (
+                          <ChatMessage key={m.msgId} role={m.role}>
+                            <ChatRoleLabel>{m.role === 'user' ? 'You' : 'AI Tutor'}</ChatRoleLabel>
+                            <ChatBubble role={m.role}>{m.content}</ChatBubble>
+                          </ChatMessage>
+                        ))}
+                        <div ref={chatEndRef} />
+                      </ChatWindow>
+                    </div>
+                  )}
+
+                  <Button variant="primary" size="lg" onClick={handleStart}>
+                    {messages.length > 0 ? 'Continue Session' : 'Start Session'}
                   </Button>
+                  {wsError && <ErrorMsg style={{ marginTop: 12 }}>{wsError}</ErrorMsg>}
                 </div>
               </Card>
             ) : (
               <>
-                <QuestionBox>
-                  <QLabel>
-                    <SpeakerDot active={ttsActive} />
-                    AI Tutor · Question {qIndex + 1}
-                    {ttsActive && <span style={{ color: theme.colors.accentLight }}>· Playing</span>}
-                  </QLabel>
-                  <QuestionText>{currentQ ?? 'Please wait...'}</QuestionText>
-                  {currentQ && (
-                    <button onClick={() => playTTS(currentQ)}
-                      style={{ position: 'absolute', top: 18, right: 20, fontSize: 12, color: theme.colors.textMuted, cursor: 'pointer', background: 'none', border: 'none', fontFamily: theme.fonts.sans }}>
-                      🔊 Replay
-                    </button>
-                  )}
-                </QuestionBox>
+                {/* 채팅 창 */}
+                <Card>
+                  <CardHeader>
+                    <QLabel>
+                      <SpeakerDot active={ttsActive} />
+                      AI Tutor Chat
+                      {ttsActive && <span style={{ color: theme.colors.accentLight }}>· Speaking</span>}
+                      {waiting && <span style={{ color: '#60A5FA' }}>· Processing</span>}
+                    </QLabel>
+                  </CardHeader>
+                  <ChatWindow>
+                    {messages.map(m => (
+                      <ChatMessage key={m.msgId} role={m.role}>
+                        <ChatRoleLabel>{m.role === 'user' ? 'You' : 'AI Tutor'}</ChatRoleLabel>
+                        <ChatBubble role={m.role}>{m.content}</ChatBubble>
+                      </ChatMessage>
+                    ))}
+                    {/* 스트리밍 중인 응답 */}
+                    {streamingText && (
+                      <ChatMessage role="assistant">
+                        <ChatRoleLabel>AI Tutor · Streaming...</ChatRoleLabel>
+                        <ChatBubble role="assistant">{streamingText}</ChatBubble>
+                      </ChatMessage>
+                    )}
+                    <div ref={chatEndRef} />
+                  </ChatWindow>
+                </Card>
 
+                {/* 마이크 컨트롤 */}
                 <ControlPanel>
-                  <MicBtn recording={recording} disabled={waiting || ttsActive || !currentQ} onClick={handleMic}>
+                  <MicBtn
+                    recording={recording}
+                    disabled={waiting || ttsActive}
+                    onClick={handleMic}
+                  >
                     {recording ? '⏹' : '🎙'}
                   </MicBtn>
                   <ControlInfo>
                     <ControlTitle>
-                      {waiting ? 'Analyzing your answer...' : recording ? 'Recording — press again to stop' : 'Press the mic to start your answer'}
+                      {waiting ? 'Analyzing your answer...' :
+                       recording ? 'Recording — press again to stop' :
+                       'Press the mic to start your answer'}
                     </ControlTitle>
                     <ControlSub>
-                      {ttsActive ? 'Wait for the question to finish playing' : recording ? '🔴 REC' : 'Ready'}
+                      {ttsActive ? 'Wait for the AI to finish speaking' :
+                       recording ? '🔴 REC' : 'Ready'}
                     </ControlSub>
                   </ControlInfo>
+                  <Button variant="secondary" size="sm" onClick={handleEndSession}>
+                    End
+                  </Button>
                 </ControlPanel>
 
-                {transcript && (
-                  <InlineBox>
-                    <InlineLabel>Your Answer</InlineLabel>
-                    <p style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 1.7, fontStyle: 'italic' }}>{transcript}</p>
-                  </InlineBox>
-                )}
-
-                {feedback && (
-                  <InlineBox variant="feedback">
-                    <InlineLabel variant="feedback">Feedback</InlineLabel>
-                    <p style={{ fontSize: 14, color: theme.colors.textPrimary, lineHeight: 1.7 }}>{feedback}</p>
-                  </InlineBox>
-                )}
+                {wsError && <ErrorMsg>{wsError}</ErrorMsg>}
               </>
             )}
           </MainPanel>

@@ -1,30 +1,20 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/Button'
 import { Card, CardHeader, CardTitle, PageLayout, PageTitle, PageSubtitle, Badge } from '../components/Card'
 import { theme } from '../styles/theme'
+import { api, openSSE } from '../lib/api'
 
-// ---- API (ready for integration) ----
-const API_BASE = ''
-
-export const chunkPdfs = async (files: File[]): Promise<any> => {
-  const form = new FormData()
-  files.forEach(f => form.append('files', f))
-  form.append('window_size', '1')
-  form.append('overlap_pages', '150')
-  form.append('max_tokens', '800')
-  const res = await fetch(`${API_BASE}/api/rag/chunk-pdfs`, { method: 'POST', body: form })
-  return res.json()
+// ---- API Types ----
+interface RagSource {
+  docId: string
+  source: string
+  key: string
+  uploadedAt: string
 }
 
-export const embedChunks = async (file: File): Promise<{ success: boolean; message: string; chunks_added: number }> => {
-  const form = new FormData()
-  form.append('file', file)
-  const res = await fetch(`${API_BASE}/api/rag/embed-chunks`, { method: 'POST', body: form })
-  return res.json()
-}
-// -------------------------------------
+// -------------------
 
 const pulse = keyframes`
   0%, 100% { opacity: 1 }
@@ -129,7 +119,12 @@ const LogWindow = styled.div`
 
 interface LogEntry { type: 'info' | 'success' | 'error' | 'progress'; text: string; ts: string }
 
-const colorMap: Record<LogEntry['type'], string> = { info: theme.colors.textSecondary, success: theme.colors.successLight, error: theme.colors.error, progress: '#60A5FA' }
+const colorMap: Record<LogEntry['type'], string> = {
+  info: theme.colors.textSecondary,
+  success: theme.colors.successLight,
+  error: theme.colors.error,
+  progress: '#60A5FA'
+}
 const prefixMap: Record<LogEntry['type'], string> = { info: '·', success: '✓', error: '✗', progress: '→' }
 
 const LogLine = styled.div<{ type: LogEntry['type'] }>`
@@ -187,7 +182,41 @@ const PulsingDot = styled.span<{ active: boolean }>`
   margin-right: 6px;
 `
 
-const fmtSize = (b: number) => b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'
+const SourceSection = styled.div`
+  margin-top: 24px;
+`
+
+const SourceRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: ${theme.colors.bgCard};
+  border: 1px solid ${theme.colors.border};
+  border-radius: ${theme.radii.md};
+  margin-bottom: 8px;
+`
+
+const SourceName = styled.span`
+  font-size: 13px;
+  color: ${theme.colors.textPrimary};
+  font-family: ${theme.fonts.mono};
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`
+
+const SourceDate = styled.span`
+  font-size: 11px;
+  color: ${theme.colors.textMuted};
+  font-family: ${theme.fonts.mono};
+  margin-right: 10px;
+  flex-shrink: 0;
+`
+
+const fmtSize = (b: number) =>
+  b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'
 const now = () => new Date().toLocaleTimeString('en-US', { hour12: false })
 
 export const UploadPage: React.FC = () => {
@@ -195,17 +224,34 @@ export const UploadPage: React.FC = () => {
   const [dragging, setDragging] = useState(false)
   const [logs, setLogs] = useState<LogEntry[]>([{ type: 'info', text: 'Upload PDF files to begin processing.', ts: now() }])
   const [progress, setProgress] = useState(0)
-  const [status, setStatus] = useState<'idle' | 'chunking' | 'embedding' | 'done' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle')
+  const [sources, setSources] = useState<RagSource[]>([])
+  const [sourcesLoading, setSourcesLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const logEndRef = useRef<HTMLDivElement>(null)
 
-  const addLog = (entry: LogEntry) => {
+  const addLog = useCallback((entry: LogEntry) => {
     setLogs(prev => {
       const next = [...prev, entry]
       setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
       return next
     })
-  }
+  }, [])
+
+  // 업로드된 자료 목록 불러오기
+  const fetchSources = useCallback(async () => {
+    setSourcesLoading(true)
+    try {
+      const data = await api.get<RagSource[]>('/rag/sources')
+      setSources(data)
+    } catch (err: any) {
+      addLog({ type: 'error', text: `Failed to load sources: ${err.message}`, ts: now() })
+    } finally {
+      setSourcesLoading(false)
+    }
+  }, [addLog])
+
+  useEffect(() => { fetchSources() }, [fetchSources])
 
   const handleFiles = (newFiles: FileList | null) => {
     if (!newFiles) return
@@ -225,34 +271,95 @@ export const UploadPage: React.FC = () => {
 
   const handleProcess = async () => {
     if (!files.length) return
-    setStatus('chunking'); setProgress(5)
-    addLog({ type: 'progress', text: `Starting chunking for ${files.length} file(s)...`, ts: now() })
+    setStatus('uploading')
+    setProgress(5)
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      addLog({ type: 'progress', text: `Uploading "${file.name}"... (${i + 1}/${files.length})`, ts: now() })
+
+      try {
+        // 1. PDF 업로드 → key 받기
+        const form = new FormData()
+        form.append('file', file)
+        const result = await api.postForm<{ docId: string; source: string; key: string; uploadedAt: string }>(
+          '/rag/upload', form
+        )
+        addLog({ type: 'success', text: `Uploaded "${result.source}" (key: ${result.key})`, ts: now() })
+        setProgress(10 + Math.floor(((i + 0.5) / files.length) * 60))
+        setStatus('processing')
+
+        // 2. SSE로 처리 진행상황 수신
+        await new Promise<void>((resolve, reject) => {
+          addLog({ type: 'progress', text: 'Streaming processing logs via SSE...', ts: now() })
+          const closeSSE = openSSE(
+            `/rag/upload-logs/${result.key}`,
+            (data) => {
+              try {
+                const msg = JSON.parse(data)
+                if (msg.type === 'done' || msg.status === 'done') {
+                  addLog({ type: 'success', text: msg.message ?? 'Processing complete.', ts: now() })
+                  closeSSE()
+                  resolve()
+                } else if (msg.type === 'error' || msg.status === 'error') {
+                  addLog({ type: 'error', text: msg.message ?? 'Processing error.', ts: now() })
+                  closeSSE()
+                  reject(new Error(msg.message))
+                } else {
+                  addLog({ type: 'progress', text: msg.message ?? data, ts: now() })
+                }
+              } catch {
+                // 단순 텍스트 메시지
+                addLog({ type: 'progress', text: data, ts: now() })
+              }
+            },
+            (e) => {
+              // SSE가 종료되면 done으로 처리
+              const target = e.target as EventSource
+              if (target.readyState === EventSource.CLOSED) {
+                closeSSE()
+                resolve()
+              }
+            }
+          )
+
+          // 타임아웃: 60초
+          setTimeout(() => { closeSSE(); resolve() }, 60000)
+        })
+
+        setProgress(10 + Math.floor(((i + 1) / files.length) * 85))
+
+      } catch (err: any) {
+        setStatus('error')
+        addLog({ type: 'error', text: `Error: ${err.message}`, ts: now() })
+        return
+      }
+    }
+
+    setProgress(100)
+    setStatus('done')
+    addLog({ type: 'success', text: 'All files processed. Fetching updated source list...', ts: now() })
+    await fetchSources()
+  }
+
+  const handleDeleteSource = async (docId: string, sourceName: string) => {
     try {
-      // --- MOCK (replace with: const chunks = await chunkPdfs(files)) ---
-      await new Promise(r => setTimeout(r, 800)); setProgress(30)
-      addLog({ type: 'progress', text: 'Sliding-window chunking... (window_size=1, max_tokens=800)', ts: now() })
-      await new Promise(r => setTimeout(r, 600)); setProgress(50)
-      const mockCount = files.length * 47
-      addLog({ type: 'success', text: `Chunking complete — ${mockCount} chunks created`, ts: now() })
-      setStatus('embedding')
-      addLog({ type: 'progress', text: 'Embedding into ChromaDB...', ts: now() })
-      await new Promise(r => setTimeout(r, 400)); setProgress(70)
-      addLog({ type: 'progress', text: 'Vectorizing text chunks...', ts: now() })
-      await new Promise(r => setTimeout(r, 800)); setProgress(95)
-      addLog({ type: 'success', text: `${mockCount} chunks saved to vector DB`, ts: now() })
-      await new Promise(r => setTimeout(r, 300)); setProgress(100)
-      setStatus('done')
-      addLog({ type: 'success', text: 'All files processed. Proceed to Set Goals.', ts: now() })
+      await api.delete('/rag/sources', { docId })
+      addLog({ type: 'info', text: `Deleted "${sourceName}"`, ts: now() })
+      setSources(prev => prev.filter(s => s.docId !== docId))
     } catch (err: any) {
-      setStatus('error')
-      addLog({ type: 'error', text: `Error: ${err.message}`, ts: now() })
+      addLog({ type: 'error', text: `Delete failed: ${err.message}`, ts: now() })
     }
   }
 
-  const isProcessing = status === 'chunking' || status === 'embedding'
+  const isProcessing = status === 'uploading' || status === 'processing'
 
   const statusLabel: Record<typeof status, string> = {
-    idle: 'Idle', chunking: 'Chunking', embedding: 'Embedding', done: 'Done', error: 'Error'
+    idle: 'Idle',
+    uploading: 'Uploading',
+    processing: 'Processing',
+    done: 'Done',
+    error: 'Error',
   }
 
   return (
@@ -260,7 +367,7 @@ export const UploadPage: React.FC = () => {
       <AppHeader />
       <PageLayout>
         <PageTitle>Upload Materials</PageTitle>
-        <PageSubtitle>Upload your PDF lecture files. They will be automatically chunked and embedded for RAG.</PageSubtitle>
+        <PageSubtitle>Upload your PDF lecture files. They will be vectorized and stored for RAG-based tutoring.</PageSubtitle>
 
         <TwoCol>
           <div>
@@ -298,15 +405,47 @@ export const UploadPage: React.FC = () => {
             </Card>
 
             <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <Button variant="primary" size="md" disabled={!files.length || isProcessing || status === 'done'} loading={isProcessing} onClick={handleProcess} fullWidth>
-                {status === 'done' ? 'Processing Complete ✓' : isProcessing ? 'Processing...' : 'Start Chunking & Embedding'}
+              <Button
+                variant="primary"
+                size="md"
+                disabled={!files.length || isProcessing || status === 'done'}
+                loading={isProcessing}
+                onClick={handleProcess}
+                fullWidth
+              >
+                {status === 'done' ? 'Processing Complete ✓' : isProcessing ? 'Processing...' : 'Upload & Process'}
               </Button>
               {(status === 'done' || status === 'error') && (
-                <Button variant="secondary" size="md" onClick={() => { setFiles([]); setProgress(0); setStatus('idle'); setLogs([{ type: 'info', text: 'Reset.', ts: now() }]) }}>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => { setFiles([]); setProgress(0); setStatus('idle'); setLogs([{ type: 'info', text: 'Reset.', ts: now() }]) }}
+                >
                   Reset
                 </Button>
               )}
             </div>
+
+            {/* 업로드된 자료 목록 */}
+            <SourceSection>
+              <CardHeader style={{ marginBottom: 10 }}>
+                <CardTitle>Uploaded Sources</CardTitle>
+                {!sourcesLoading && <Badge>{sources.length}</Badge>}
+              </CardHeader>
+              {sourcesLoading ? (
+                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>Loading...</p>
+              ) : sources.length === 0 ? (
+                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>No uploaded sources yet.</p>
+              ) : (
+                sources.map(s => (
+                  <SourceRow key={s.docId}>
+                    <SourceName>{s.source}</SourceName>
+                    <SourceDate>{new Date(s.uploadedAt).toLocaleDateString('ko-KR')}</SourceDate>
+                    <RemoveBtn onClick={() => handleDeleteSource(s.docId, s.source)}>×</RemoveBtn>
+                  </SourceRow>
+                ))
+              )}
+            </SourceSection>
           </div>
 
           <div>
@@ -322,7 +461,11 @@ export const UploadPage: React.FC = () => {
                 <>
                   <ProgressBar value={progress} />
                   <StatusRow>
-                    <StatusText>{status === 'chunking' ? 'Sliding-window chunking' : status === 'embedding' ? 'ChromaDB vector storage' : status === 'done' ? 'Complete' : ''}</StatusText>
+                    <StatusText>
+                      {status === 'uploading' ? 'Uploading to server' :
+                       status === 'processing' ? 'Vectorizing (RAG)' :
+                       status === 'done' ? 'Complete' : ''}
+                    </StatusText>
                     <StatusText>{progress}%</StatusText>
                   </StatusRow>
                 </>

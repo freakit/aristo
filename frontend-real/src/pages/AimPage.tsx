@@ -1,9 +1,28 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import styled, { keyframes } from 'styled-components'
+import { useNavigate } from 'react-router-dom'
 import { AppHeader } from '../components/AppHeader'
 import { Button } from '../components/Button'
 import { Card, CardHeader, CardTitle, PageLayout, PageTitle, PageSubtitle, Badge } from '../components/Card'
 import { theme } from '../styles/theme'
+import { api } from '../lib/api'
+
+// ---- API Types ----
+interface RagSource {
+  docId: string
+  source: string
+  key: string
+  uploadedAt: string
+}
+
+interface CreatedSession {
+  sessionId: string
+  uid: string
+  title: string
+  vectorDocIds: string[]
+  status: string
+  createdAt: string
+}
 
 export interface StudyGoal {
   id: string
@@ -20,17 +39,16 @@ export interface Lesson {
   createdAt: string
 }
 
-// ---- API (ready for integration) ----
-const API_BASE = ''
-export const generateLesson = async (files: string[], mode: 'basic' | 'applied'): Promise<Lesson> => {
-  const res = await fetch(`${API_BASE}/api/lesson/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ files, mode }),
-  })
-  return res.json()
+export interface SessionInfo {
+  sessionId: string
+  title: string
+  vectorDocIds: string[]
+  vectorKeys: string[]
+  status: string
+  createdAt: string
 }
-// -------------------------------------
+
+// -------------------
 
 const spin = keyframes`from { transform: rotate(0deg) } to { transform: rotate(360deg) }`
 
@@ -105,75 +123,6 @@ const Checkbox = styled.div<{ checked: boolean }>`
   transition: all 0.15s;
 `
 
-const SectionTitle = styled.h3`
-  font-size: 11px;
-  font-weight: 600;
-  color: ${theme.colors.textSecondary};
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: 10px;
-`
-
-const GoalCard = styled.div`
-  background: ${theme.colors.bgCard};
-  border: 1px solid ${theme.colors.border};
-  border-radius: ${theme.radii.md};
-  padding: 18px;
-  margin-bottom: 10px;
-`
-
-const GoalHeader = styled.div`
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-bottom: 12px;
-`
-
-const GoalNum = styled.div`
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: ${theme.colors.accent};
-  color: #fff;
-  font-size: 10px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-family: ${theme.fonts.mono};
-`
-
-const GoalText = styled.p`
-  font-size: 14px;
-  font-weight: 500;
-  color: ${theme.colors.textPrimary};
-  line-height: 1.55;
-`
-
-const QuestionList = styled.ul`
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding-left: 32px;
-`
-
-const QuestionItem = styled.li`
-  font-size: 13px;
-  color: ${theme.colors.textSecondary};
-  line-height: 1.6;
-  display: flex;
-  gap: 7px;
-  &::before {
-    content: 'Q.';
-    font-family: ${theme.fonts.mono};
-    font-size: 10px;
-    color: ${theme.colors.textMuted};
-    flex-shrink: 0;
-    margin-top: 2px;
-  }
-`
-
 const SpinnerIcon = styled.div`
   width: 20px; height: 20px;
   border: 2px solid ${theme.colors.border};
@@ -193,53 +142,76 @@ const EmptyState = styled.div`
   text-align: center;
 `
 
-const MOCK_FILES = ['lecture_01_data_structures.pdf', 'lecture_02_algorithms.pdf', 'lecture_03_complexity.pdf']
-
-const MOCK_LESSON: Lesson = {
-  id: 'lesson-001',
-  title: 'Data Structures — Foundations',
-  files: ['lecture_01_data_structures.pdf'],
-  mode: 'basic',
-  createdAt: new Date().toISOString(),
-  goals: [
-    {
-      id: 'g1',
-      text: 'Explain the structural difference between arrays and linked lists, and describe how each allocates memory.',
-      questions: ['Why is array indexing O(1) in terms of memory?', 'Why is mid-list insertion more efficient in a linked list than in an array?', 'What distinguishes a static array from a dynamic array?'],
-    },
-    {
-      id: 'g2',
-      text: 'Understand how stacks and queues work and describe real-world use cases for each.',
-      questions: ['Explain LIFO vs FIFO with everyday examples.', 'Describe the relationship between recursive calls and the call stack.', 'Why is a queue used in BFS traversal?'],
-    },
-    {
-      id: 'g3',
-      text: 'Correctly define core tree terminology: root, leaf, depth, and height.',
-      questions: ['What is the difference between a complete and a perfect binary tree?', 'Compare depth-first and breadth-first traversal in trees.', 'What prerequisite makes BST search O(log n)?'],
-    },
-  ],
-}
+const ErrorMsg = styled.p`
+  font-size: 13px;
+  color: ${theme.colors.error};
+  margin-top: 8px;
+`
 
 export const AimPage: React.FC = () => {
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([])
+  const navigate = useNavigate()
+  const [sources, setSources] = useState<RagSource[]>([])
+  const [sourcesLoading, setSourcesLoading] = useState(true)
+  const [sourcesError, setSourcesError] = useState('')
+
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
   const [mode, setMode] = useState<'basic' | 'applied' | null>(null)
-  const [generating, setGenerating] = useState(false)
-  const [lesson, setLesson] = useState<Lesson | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createdSession, setCreatedSession] = useState<SessionInfo | null>(null)
 
-  const toggleFile = (f: string) =>
-    setSelectedFiles(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
-
-  const canGenerate = selectedFiles.length > 0 && mode !== null && !generating && !lesson
-
-  const handleGenerate = async () => {
-    setGenerating(true)
+  const fetchSources = useCallback(async () => {
+    setSourcesLoading(true)
+    setSourcesError('')
     try {
-      // const result = await generateLesson(selectedFiles, mode!)
-      await new Promise(r => setTimeout(r, 2200))
-      setLesson({ ...MOCK_LESSON, files: selectedFiles, mode: mode! })
+      const data = await api.get<RagSource[]>('/rag/sources')
+      setSources(data)
+    } catch (err: any) {
+      setSourcesError(`Failed to load sources: ${err.message}`)
     } finally {
-      setGenerating(false)
+      setSourcesLoading(false)
     }
+  }, [])
+
+  useEffect(() => { fetchSources() }, [fetchSources])
+
+  const toggleDoc = (docId: string) =>
+    setSelectedDocIds(prev => prev.includes(docId) ? prev.filter(x => x !== docId) : [...prev, docId])
+
+  const canCreate = selectedDocIds.length > 0 && mode !== null && !creating && !createdSession
+
+  const handleCreate = async () => {
+    setCreating(true)
+    setCreateError('')
+    try {
+      // 선택된 소스들의 key 목록
+      const selectedSources = sources.filter(s => selectedDocIds.includes(s.docId))
+      const title = `${mode === 'basic' ? 'Conceptual' : 'Applied'} Study — ${selectedSources.map(s => s.source).join(', ')}`
+
+      const result = await api.post<CreatedSession>('/sessions', {
+        title,
+        vectorDocIds: selectedDocIds,
+      })
+
+      const vectorKeys = selectedSources.map(s => s.key)
+      setCreatedSession({
+        sessionId: result.sessionId,
+        title: result.title,
+        vectorDocIds: result.vectorDocIds,
+        vectorKeys,
+        status: result.status,
+        createdAt: result.createdAt,
+      })
+    } catch (err: any) {
+      setCreateError(err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleGoToStudy = () => {
+    if (!createdSession) return
+    navigate('/study', { state: { session: createdSession } })
   }
 
   return (
@@ -247,24 +219,38 @@ export const AimPage: React.FC = () => {
       <AppHeader />
       <PageLayout>
         <PageTitle>Set Learning Goals</PageTitle>
-        <PageSubtitle>Select your materials and learning mode. AI will generate tailored objectives and verification questions.</PageSubtitle>
+        <PageSubtitle>Select your uploaded materials and learning mode, then create a tutoring session.</PageSubtitle>
 
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 24, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <Card>
               <CardHeader>
                 <CardTitle>Select Files</CardTitle>
-                {selectedFiles.length > 0 && <Badge color="blue">{selectedFiles.length} selected</Badge>}
+                {selectedDocIds.length > 0 && <Badge color="blue">{selectedDocIds.length} selected</Badge>}
               </CardHeader>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {MOCK_FILES.map(f => (
-                  <FileCheckItem key={f} checked={selectedFiles.includes(f)}>
-                    <input type="checkbox" checked={selectedFiles.includes(f)} onChange={() => toggleFile(f)} />
-                    <Checkbox checked={selectedFiles.includes(f)}>{selectedFiles.includes(f) && '✓'}</Checkbox>
-                    <span style={{ fontSize: 12, color: theme.colors.textPrimary, fontFamily: theme.fonts.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f}</span>
-                  </FileCheckItem>
-                ))}
-              </div>
+
+              {sourcesLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0' }}>
+                  <SpinnerIcon />
+                  <span style={{ fontSize: 13, color: theme.colors.textMuted }}>Loading sources...</span>
+                </div>
+              ) : sourcesError ? (
+                <ErrorMsg>{sourcesError}</ErrorMsg>
+              ) : sources.length === 0 ? (
+                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>
+                  No sources found. Upload PDFs on the Upload page first.
+                </p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {sources.map(s => (
+                    <FileCheckItem key={s.docId} checked={selectedDocIds.includes(s.docId)}>
+                      <input type="checkbox" checked={selectedDocIds.includes(s.docId)} onChange={() => toggleDoc(s.docId)} />
+                      <Checkbox checked={selectedDocIds.includes(s.docId)}>{selectedDocIds.includes(s.docId) && '✓'}</Checkbox>
+                      <span style={{ fontSize: 12, color: theme.colors.textPrimary, fontFamily: theme.fonts.mono, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.source}</span>
+                    </FileCheckItem>
+                  ))}
+                </div>
+              )}
             </Card>
 
             <Card>
@@ -287,57 +273,61 @@ export const AimPage: React.FC = () => {
               </div>
             </Card>
 
-            <Button variant="primary" size="md" fullWidth disabled={!canGenerate} loading={generating} onClick={handleGenerate}>
-              Generate Learning Goals
+            <Button variant="primary" size="md" fullWidth disabled={!canCreate} loading={creating} onClick={handleCreate}>
+              {creating ? 'Creating Session...' : 'Create Tutoring Session'}
             </Button>
-            {lesson && <Button variant="secondary" size="md" fullWidth onClick={() => { setLesson(null); setSelectedFiles([]); setMode(null) }}>Regenerate</Button>}
+            {createError && <ErrorMsg>{createError}</ErrorMsg>}
+            {createdSession && (
+              <Button variant="secondary" size="md" fullWidth onClick={() => { setCreatedSession(null); setSelectedDocIds([]); setMode(null) }}>
+                Create Another
+              </Button>
+            )}
           </div>
 
           <div>
-            {!generating && !lesson && (
+            {!creating && !createdSession && (
               <EmptyState>
                 <div style={{ fontSize: 32 }}>🎯</div>
-                <p style={{ fontSize: 15, color: theme.colors.textSecondary }}>Select files and a learning mode,<br />then click Generate.</p>
+                <p style={{ fontSize: 15, color: theme.colors.textSecondary }}>
+                  Select files and a learning mode,<br />then click Create.
+                </p>
               </EmptyState>
             )}
 
-            {generating && (
+            {creating && (
               <EmptyState>
                 <SpinnerIcon />
-                <p style={{ fontSize: 14, color: theme.colors.textSecondary }}>Gemini is analyzing your materials...</p>
-                <p style={{ fontSize: 12, color: theme.colors.textMuted, fontFamily: theme.fonts.mono }}>RAG retrieval → Goal derivation → Question generation</p>
+                <p style={{ fontSize: 14, color: theme.colors.textSecondary }}>Creating tutoring session...</p>
+                <p style={{ fontSize: 12, color: theme.colors.textMuted, fontFamily: theme.fonts.mono }}>POST /api/sessions</p>
               </EmptyState>
             )}
 
-            {lesson && !generating && (
+            {createdSession && !creating && (
               <Card>
                 <CardHeader>
                   <div>
-                    <CardTitle>{lesson.title}</CardTitle>
+                    <CardTitle>{createdSession.title}</CardTitle>
                     <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <Badge color="blue">{lesson.mode === 'basic' ? 'Conceptual' : 'Applied'}</Badge>
-                      {lesson.files.map(f => <Badge key={f}>{f}</Badge>)}
+                      <Badge color="green">Session Created</Badge>
+                      <Badge color="blue">{mode === 'basic' ? 'Conceptual' : 'Applied'}</Badge>
+                      <Badge>{selectedDocIds.length} file(s)</Badge>
                     </div>
                   </div>
-                  <Badge color="green">{lesson.goals.length} goals</Badge>
                 </CardHeader>
 
-                <SectionTitle>Learning Objectives & Key Questions</SectionTitle>
+                <div style={{ margin: '12px 0', padding: '12px 14px', background: theme.colors.bgCard, border: `1px solid ${theme.colors.border}`, borderRadius: theme.radii.md }}>
+                  <p style={{ fontSize: 11, color: theme.colors.textMuted, fontFamily: theme.fonts.mono, marginBottom: 4 }}>Session ID</p>
+                  <p style={{ fontSize: 13, color: theme.colors.textPrimary, fontFamily: theme.fonts.mono }}>{createdSession.sessionId}</p>
+                </div>
 
-                {lesson.goals.map((g, i) => (
-                  <GoalCard key={g.id}>
-                    <GoalHeader>
-                      <GoalNum>{i + 1}</GoalNum>
-                      <GoalText>{g.text}</GoalText>
-                    </GoalHeader>
-                    <QuestionList>
-                      {g.questions.map((q, j) => <QuestionItem key={j}>{q}</QuestionItem>)}
-                    </QuestionList>
-                  </GoalCard>
-                ))}
+                <p style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 16 }}>
+                  Your session is ready. The AI tutor will guide you through Socratic questioning based on your selected materials.
+                </p>
 
-                <div style={{ marginTop: 16 }}>
-                  <Button variant="primary" size="md" fullWidth>Go to Study →</Button>
+                <div style={{ marginTop: 8 }}>
+                  <Button variant="primary" size="md" fullWidth onClick={handleGoToStudy}>
+                    Go to Study →
+                  </Button>
                 </div>
               </Card>
             )}
