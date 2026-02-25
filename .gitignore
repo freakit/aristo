@@ -43,3 +43,6 @@ uploads/
 # Documents (large files)
 documents/
 __pycache__/
+
+# Firebase
+serviceAccountKey.json
