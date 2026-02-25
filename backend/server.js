@@ -51,14 +51,7 @@ app.get("/", (req, res) => {
 
 // 중앙 에러 핸들러
 app.use((err, req, res, next) => {
-  if (req.path === "/api/trees/init") {
-    logger.error({ path: req.path }, "Error in /api/trees/init");
-  } else {
-    logger.error(
-      { method: req.method, path: req.path, err },
-      "Unhandled Error",
-    );
-  }
+  logger.error({ method: req.method, path: req.path, err }, "Unhandled Error");
 
   const statusCode = err.statusCode || 500;
   const message = err.message || "서버 내부 오류가 발생했습니다.";
