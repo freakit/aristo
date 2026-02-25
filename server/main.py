@@ -52,11 +52,13 @@ from apis.question.router import router as question_router
 from apis.stt.router import router as stt_router
 from apis.voice.router import router as voice_router
 from apis.rag.router import router as rag_router
+from apis.liveQuestion.router import router as live_question_router
 
 app.include_router(question_router)
 app.include_router(stt_router)
 app.include_router(voice_router)
 app.include_router(rag_router)
+app.include_router(live_question_router)
 
 
 # ====== 공통 엔드포인트 ======
@@ -112,6 +114,17 @@ async def root():
                     "processing_logs": "GET /api/rag/processing-logs",
                 },
             },
+            "live_question": {
+                "prefix": "/api/live-question",
+                "description": "실시간 음성 문제 출제 (Gemini Live + RAG)",
+                "endpoints": {
+                    "create_session": "POST /api/live-question/session",
+                    "websocket": "WS /api/live-question/ws/{session_id}",
+                    "get_session": "GET /api/live-question/session/{session_id}",
+                    "sessions": "GET /api/live-question/sessions",
+                    "delete_session": "DELETE /api/live-question/session/{session_id}",
+                },
+            },
         },
     }
 
@@ -137,10 +150,11 @@ async def startup_event():
     # AI 클라이언트 초기화
     init_ai_client()
 
-    print(f"📋 Question API: /api/question")
-    print(f"🎤 STT API:      /api/stt")
-    print(f"🔊 Voice API:    /api/voice")
-    print(f"📚 RAG API:      /api/rag")
+    print(f"📋 Question API:      /api/question")
+    print(f"🎙️ Live Question API: /api/live-question")
+    print(f"🎤 STT API:           /api/stt")
+    print(f"🔊 Voice API:         /api/voice")
+    print(f"📚 RAG API:           /api/rag")
     print(f"📖 Swagger Docs: http://{HOST}:{PORT}/docs")
     print("=" * 50)
 
