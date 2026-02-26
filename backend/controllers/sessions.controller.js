@@ -1,15 +1,13 @@
 // backend/controllers/sessions.controller.js
-const sessionsRepository = require("../repositories/sessions.repository");
-const logger = require("../config/logger");
+const sessionsService = require("../services/sessions.service");
 
 class SessionsController {
   // POST /api/sessions
   async createSession(req, res, next) {
     try {
-      const uid = req.uid;
       const { title, vectorDocIds } = req.body;
-      const session = await sessionsRepository.createSession({
-        uid,
+      const session = await sessionsService.createSession({
+        uid: req.uid,
         title,
         vectorDocIds,
       });
@@ -22,11 +20,10 @@ class SessionsController {
   // GET /api/sessions
   async getSessions(req, res, next) {
     try {
-      const uid = req.uid;
       const { limit, before } = req.query;
-      const sessions = await sessionsRepository.getSessionsByUid(uid, {
-        limit: limit ? parseInt(limit) : 20,
-        before: before || null,
+      const sessions = await sessionsService.getSessions(req.uid, {
+        limit,
+        before,
       });
       res.json(sessions);
     } catch (error) {
@@ -37,22 +34,11 @@ class SessionsController {
   // GET /api/sessions/:sessionId
   async getSession(req, res, next) {
     try {
-      const { sessionId } = req.params;
-      const session = await sessionsRepository.getSessionById(sessionId);
-
-      if (!session) {
-        const err = new Error("세션을 찾을 수 없습니다.");
-        err.statusCode = 404;
-        return next(err);
-      }
-      if (session.uid !== req.uid) {
-        const err = new Error("접근 권한이 없습니다.");
-        err.statusCode = 403;
-        return next(err);
-      }
-
-      const messages = await sessionsRepository.getMessages(sessionId);
-      res.json({ ...session, messages });
+      const session = await sessionsService.getSession(
+        req.params.sessionId,
+        req.uid,
+      );
+      res.json(session);
     } catch (error) {
       next(error);
     }
@@ -61,21 +47,10 @@ class SessionsController {
   // PATCH /api/sessions/:sessionId/end
   async endSession(req, res, next) {
     try {
-      const { sessionId } = req.params;
-      const session = await sessionsRepository.getSessionById(sessionId);
-
-      if (!session) {
-        const err = new Error("세션을 찾을 수 없습니다.");
-        err.statusCode = 404;
-        return next(err);
-      }
-      if (session.uid !== req.uid) {
-        const err = new Error("접근 권한이 없습니다.");
-        err.statusCode = 403;
-        return next(err);
-      }
-
-      const updated = await sessionsRepository.endSession(sessionId);
+      const updated = await sessionsService.endSession(
+        req.params.sessionId,
+        req.uid,
+      );
       res.json(updated);
     } catch (error) {
       next(error);
@@ -85,21 +60,7 @@ class SessionsController {
   // DELETE /api/sessions/:sessionId
   async deleteSession(req, res, next) {
     try {
-      const { sessionId } = req.params;
-      const session = await sessionsRepository.getSessionById(sessionId);
-
-      if (!session) {
-        const err = new Error("세션을 찾을 수 없습니다.");
-        err.statusCode = 404;
-        return next(err);
-      }
-      if (session.uid !== req.uid) {
-        const err = new Error("접근 권한이 없습니다.");
-        err.statusCode = 403;
-        return next(err);
-      }
-
-      await sessionsRepository.deleteSession(sessionId);
+      await sessionsService.deleteSession(req.params.sessionId, req.uid);
       res.json({ message: "삭제 완료" });
     } catch (error) {
       next(error);

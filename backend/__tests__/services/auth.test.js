@@ -1,47 +1,41 @@
 // __tests__/services/auth.test.js
-// auth.controller의 register, me 엔드포인트 테스트
+// auth.service 단위 테스트
 
 jest.mock("../../config/firebase", () => ({
-  db: {
-    collection: jest.fn().mockReturnThis(),
-    doc: jest.fn().mockReturnThis(),
-    get: jest.fn(),
-    set: jest.fn(),
-  },
   auth: {
     getUser: jest.fn(),
   },
 }));
 
-const { db, auth } = require("../../config/firebase");
-const authController = require("../../controllers/auth.controller");
+jest.mock("../../repositories/users.repository", () => ({
+  getUser: jest.fn(),
+  createUser: jest.fn(),
+}));
 
-function mockRes() {
-  const res = {};
-  res.status = jest.fn().mockReturnValue(res);
-  res.json = jest.fn().mockReturnValue(res);
-  return res;
-}
+const { auth } = require("../../config/firebase");
+const usersRepository = require("../../repositories/users.repository");
+const authService = require("../../services/auth.service");
 
-describe("AuthController", () => {
+describe("AuthService", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  describe("register", () => {
-    it("유저 문서가 이미 있으면 200 반환", async () => {
-      const existingData = { uid: "uid1", email: "a@a.com", name: "홍길동" };
-      db.get.mockResolvedValue({ exists: true, data: () => existingData });
+  describe("registerUser", () => {
+    it("유저 문서가 이미 있으면 created:false로 기존 프로필 반환", async () => {
+      const existingProfile = { uid: "uid1", email: "a@a.com", name: "홍길동" };
+      usersRepository.getUser.mockResolvedValue(existingProfile);
 
-      const req = { uid: "uid1", body: { name: "홍길동" } };
-      const res = mockRes();
-      await authController.register(req, res, jest.fn());
+      const result = await authService.registerUser({
+        uid: "uid1",
+        name: "홍길동",
+      });
 
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(existingData);
+      expect(usersRepository.createUser).not.toHaveBeenCalled();
+      expect(result).toEqual({ profile: existingProfile, created: false });
     });
 
-    it("신규 유저면 Firestore에 저장 후 201 반환", async () => {
-      db.get.mockResolvedValue({ exists: false });
-      db.set.mockResolvedValue();
+    it("신규 유저면 Firebase Auth 조회 후 Firestore에 저장하고 created:true 반환", async () => {
+      usersRepository.getUser.mockResolvedValue(null);
+      usersRepository.createUser.mockResolvedValue();
       auth.getUser.mockResolvedValue({
         email: "new@a.com",
         displayName: "김철수",
@@ -49,46 +43,62 @@ describe("AuthController", () => {
         providerData: [{ providerId: "password" }],
       });
 
-      const req = { uid: "uid2", body: { name: "김철수" } };
-      const res = mockRes();
-      await authController.register(req, res, jest.fn());
+      const result = await authService.registerUser({
+        uid: "uid2",
+        name: "김철수",
+      });
 
-      expect(db.set).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(201);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ uid: "uid2", email: "new@a.com" }),
+      expect(usersRepository.createUser).toHaveBeenCalledWith(
+        "uid2",
+        expect.objectContaining({
+          uid: "uid2",
+          email: "new@a.com",
+          provider: "email",
+        }),
       );
+      expect(result.created).toBe(true);
+      expect(result.profile).toMatchObject({ uid: "uid2", email: "new@a.com" });
     });
 
-    it("Firebase 오류 시 next(error) 호출", async () => {
-      db.get.mockRejectedValue(new Error("Firestore error"));
-      const req = { uid: "uid3", body: {} };
-      const next = jest.fn();
-      await authController.register(req, mockRes(), next);
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
+    it("Google 계정은 provider가 google", async () => {
+      usersRepository.getUser.mockResolvedValue(null);
+      usersRepository.createUser.mockResolvedValue();
+      auth.getUser.mockResolvedValue({
+        email: "g@gmail.com",
+        displayName: "구글유저",
+        photoURL: "http://photo.url",
+        providerData: [{ providerId: "google.com" }],
+      });
+
+      const { profile } = await authService.registerUser({ uid: "uid3" });
+      expect(profile.provider).toBe("google");
+    });
+
+    it("Firebase Auth 오류 시 에러를 throw", async () => {
+      usersRepository.getUser.mockResolvedValue(null);
+      auth.getUser.mockRejectedValue(new Error("Firebase error"));
+
+      await expect(authService.registerUser({ uid: "uid4" })).rejects.toThrow(
+        "Firebase error",
+      );
     });
   });
 
-  describe("me", () => {
-    it("유저 문서가 존재하면 200 반환", async () => {
-      const data = { uid: "uid1", email: "a@a.com", name: "홍길동" };
-      db.get.mockResolvedValue({ exists: true, data: () => data });
+  describe("getProfile", () => {
+    it("유저 문서가 존재하면 프로필 반환", async () => {
+      const profile = { uid: "uid1", email: "a@a.com", name: "홍길동" };
+      usersRepository.getUser.mockResolvedValue(profile);
 
-      const req = { uid: "uid1" };
-      const res = mockRes();
-      await authController.me(req, res, jest.fn());
-
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(data);
+      const result = await authService.getProfile("uid1");
+      expect(result).toEqual(profile);
     });
 
-    it("유저 문서 없으면 404", async () => {
-      db.get.mockResolvedValue({ exists: false });
-      const next = jest.fn();
-      await authController.me({ uid: "uid_none" }, mockRes(), next);
-      expect(next).toHaveBeenCalledWith(
-        expect.objectContaining({ statusCode: 404 }),
-      );
+    it("유저 문서 없으면 statusCode 404 에러 throw", async () => {
+      usersRepository.getUser.mockResolvedValue(null);
+
+      await expect(authService.getProfile("uid_none")).rejects.toMatchObject({
+        statusCode: 404,
+      });
     });
   });
 });

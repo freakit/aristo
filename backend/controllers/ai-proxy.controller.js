@@ -2,7 +2,7 @@
 // 기존 HTTP 방식의 Python AI 프록시 — WebSocket(/ws/tutor)으로 전환 예정
 // 현재는 Python 서버와의 연동 테스트용으로 유지
 const pythonApiService = require("../services/python-api.service");
-const sessionsRepository = require("../repositories/sessions.repository");
+const sessionsService = require("../services/sessions.service");
 const vectordbRepository = require("../repositories/vectordb.repository");
 const logger = require("../config/logger");
 
@@ -16,13 +16,15 @@ exports.ask = async (req, res) => {
   }
 
   try {
-    // Firestore에서 세션 → vectorDocIds 조회 → RAG key 목록 획득
-    const session = await sessionsRepository.getSessionById(sessionId);
-    if (!session)
-      return res.status(404).json({ error: "세션을 찾을 수 없습니다." });
+    // sessionsService를 통해 세션 조회 + 권한 확인 (messages 포함)
+    const sessionWithMessages = await sessionsService.getSession(
+      sessionId,
+      req.uid,
+    );
 
+    // vectorDocIds로 RAG key 목록 획득
     const vectorKeys = await vectordbRepository.getKeysByDocIds(
-      session.vectorDocIds,
+      sessionWithMessages.vectorDocIds,
     );
 
     // Python AI 서버에 요청
@@ -32,8 +34,10 @@ exports.ask = async (req, res) => {
       vectorKeys,
     );
 
-    // Firestore에 메시지 저장
-    const turn = (await sessionsRepository.getMessages(sessionId)).length + 1;
+    // Firestore에 메시지 저장 (sessionsRepository 직접 접근 대신 서비스를 통해)
+    // 메시지 저장은 순수 데이터 조작이므로 repository 직접 사용
+    const sessionsRepository = require("../repositories/sessions.repository");
+    const turn = sessionWithMessages.messages.length + 1;
     await sessionsRepository.addMessage(sessionId, {
       role: "user",
       content: userInput,
@@ -50,7 +54,8 @@ exports.ask = async (req, res) => {
     res.json(result);
   } catch (error) {
     logger.error({ err: error }, "AI proxy ask error");
-    res.status(500).json({ error: "AI 요청 실패" });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ error: error.message || "AI 요청 실패" });
   }
 };
 

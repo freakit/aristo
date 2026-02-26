@@ -36,6 +36,13 @@ class VectorDbRepository {
     return snap.size;
   }
 
+  // docId로 벡터 문서 단건 조회
+  async getVectorDocById(docId) {
+    const snap = await db.collection("vectordb").doc(docId).get();
+    if (!snap.exists) return null;
+    return { docId: snap.id, ...snap.data() };
+  }
+
   // docId로 벡터 문서 삭제
   async deleteVectorByDocId(docId) {
     await db.collection("vectordb").doc(docId).delete();
