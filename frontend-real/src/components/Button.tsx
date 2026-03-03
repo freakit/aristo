@@ -65,11 +65,11 @@ const sizes = {
   lg: css`padding: 12px 24px; font-size: 15px; height: 48px;`,
 }
 
-const StyledButton = styled.button<{ variant: Variant; size: Size; fullWidth?: boolean }>`
+const StyledButton = styled.button<{ $variant: Variant; $size: Size; $fullWidth?: boolean }>`
   ${base}
-  ${p => variants[p.variant]}
-  ${p => sizes[p.size]}
-  ${p => p.fullWidth && 'width: 100%;'}
+  ${p => variants[p.$variant]}
+  ${p => sizes[p.$size]}
+  ${p => p.$fullWidth && 'width: 100%;'}
 `
 
 const Spinner = styled.span`
@@ -96,9 +96,9 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   return (
     <StyledButton
-      variant={variant}
-      size={size}
-      fullWidth={fullWidth}
+      $variant={variant}
+      $size={size}
+      $fullWidth={fullWidth}
       disabled={disabled || loading}
       {...props}
     >

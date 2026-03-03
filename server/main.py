@@ -3,7 +3,8 @@ Aristo Backend - 통합 FastAPI 서버
 모든 API를 하나의 서버에서 관리합니다.
 
 서비스:
-  - /api/question  : 문제 출제 (소크라틱 Q&A)
+  - /api/question  : 문제 출제 (소크라틱 Q&A 평가 모드)
+  - /api/tutor     : AI 튜터 (설명 → 소크라틱 가이드 모드)
   - /api/stt       : 음성 인식 (STT)
   - /api/voice     : 음성 분석 (eGeMAPS/GRBAS)
   - /api/rag       : RAG 파이프라인 (PDF 청킹, 임베딩, 검색, 챗봇)
@@ -49,11 +50,13 @@ app.mount("/figures", StaticFiles(directory=str(figures_dir)), name="figures")
 
 # ====== 라우터 등록 ======
 from apis.question.router import router as question_router
+from apis.tutor.router import router as tutor_router
 from apis.stt.router import router as stt_router
 from apis.voice.router import router as voice_router
 from apis.rag.router import router as rag_router
 
 app.include_router(question_router)
+app.include_router(tutor_router)
 app.include_router(stt_router)
 app.include_router(voice_router)
 app.include_router(rag_router)
@@ -137,7 +140,8 @@ async def startup_event():
     # AI 클라이언트 초기화
     init_ai_client()
 
-    print(f"📋 Question API: /api/question")
+    print(f"📋 Question API: /api/question  (소크라틱 평가)")
+    print(f"🎓 Tutor API:    /api/tutor     (AI 튜터 모드)")
     print(f"🎤 STT API:      /api/stt")
     print(f"🔊 Voice API:    /api/voice")
     print(f"📚 RAG API:      /api/rag")

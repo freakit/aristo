@@ -22,6 +22,7 @@ const allowedOrigins = [
   "https://aristotest.freakit.co.kr",
   "http://localhost:3000",
   "http://localhost:3001", // Swagger UI
+  "http://localhost:5173", // Vite frontend
 ];
 
 const corsOptions = {

@@ -12,6 +12,7 @@ const ragRoutes = require("./rag.routes");
 const aiProxyRoutes = require("./ai-proxy.routes");
 const pythonRoutes = require("./python.routes");
 const sessionsRoutes = require("./sessions.routes");
+const tutorRoutes = require("./tutor.routes");
 
 // STT Route
 router.post(
@@ -30,5 +31,6 @@ router.use("/rag", ragRoutes);
 router.use("/ai-proxy", aiProxyRoutes);
 router.use("/python", pythonRoutes);
 router.use("/sessions", sessionsRoutes);
+router.use("/tutor", tutorRoutes);
 
 module.exports = router;

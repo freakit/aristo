@@ -20,10 +20,11 @@ class VectorDbRepository {
     const snap = await db
       .collection("vectordb")
       .where("uid", "==", uid)
-      .orderBy("uploadedAt", "desc")
       .get();
 
-    return snap.docs.map((doc) => ({ docId: doc.id, ...doc.data() }));
+    const docs = snap.docs.map((doc) => ({ docId: doc.id, ...doc.data() }));
+    docs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+    return docs;
   }
 
   // key로 벡터 문서 삭제

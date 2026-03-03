@@ -297,14 +297,16 @@ export const UploadPage: React.FC = () => {
             (data) => {
               try {
                 const msg = JSON.parse(data)
-                if (msg.type === 'done' || msg.status === 'done') {
+                if (msg.type === 'done' || msg.status === 'success') {
                   addLog({ type: 'success', text: msg.message ?? 'Processing complete.', ts: now() })
                   closeSSE()
                   resolve()
-                } else if (msg.type === 'error' || msg.status === 'error') {
+                } else if (msg.status === 'error') {
                   addLog({ type: 'error', text: msg.message ?? 'Processing error.', ts: now() })
                   closeSSE()
                   reject(new Error(msg.message))
+                } else if (msg.status === 'ping') {
+                  // heartbeat — 무시
                 } else {
                   addLog({ type: 'progress', text: msg.message ?? data, ts: now() })
                 }
@@ -344,7 +346,7 @@ export const UploadPage: React.FC = () => {
 
   const handleDeleteSource = async (docId: string, sourceName: string) => {
     try {
-      await api.delete('/rag/sources', { docId })
+      await api.delete(`/rag/sources/${docId}`)
       addLog({ type: 'info', text: `Deleted "${sourceName}"`, ts: now() })
       setSources(prev => prev.filter(s => s.docId !== docId))
     } catch (err: any) {

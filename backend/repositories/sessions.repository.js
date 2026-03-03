@@ -22,17 +22,20 @@ class SessionsRepository {
   async getSessionsByUid(uid, { limit = 20, before = null } = {}) {
     let query = db
       .collection("sessions")
-      .where("uid", "==", uid)
-      .orderBy("createdAt", "desc")
-      .limit(limit);
-
-    if (before) {
-      const cursorSnap = await db.collection("sessions").doc(before).get();
-      if (cursorSnap.exists) query = query.startAfter(cursorSnap);
-    }
+      .where("uid", "==", uid);
 
     const snap = await query.get();
-    return snap.docs.map((doc) => ({ sessionId: doc.id, ...doc.data() }));
+    let docs = snap.docs.map((doc) => ({ sessionId: doc.id, ...doc.data() }));
+    docs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (before) {
+      const idx = docs.findIndex(d => d.sessionId === before);
+      if (idx !== -1) {
+        docs = docs.slice(idx + 1);
+      }
+    }
+
+    return docs.slice(0, limit);
   }
 
   // 세션 단건 조회
