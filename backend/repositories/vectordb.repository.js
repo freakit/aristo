@@ -1,79 +1,61 @@
 // backend/repositories/vectordb.repository.js
-const pool = require("../config/db");
+const { db } = require("../config/firebase");
 
 class VectorDbRepository {
-  // VectorDB 생성
-  async createVector({ uid, source, key }) {
-    const conn = await pool.getConnection();
-    try {
-      const query = `
-        INSERT INTO vectordb (uid, source, uploaded_at, \`key\`)
-        VALUES (?, ?, NOW(), ?)
-      `;
-      const [result] = await conn.query(query, [uid, source, key]);
-      return result.insertId;
-    } finally {
-      conn.release();
-    }
+  // Firestore vectordb 문서 생성
+  async createVector({ uid, source, key, uploaded_at }) {
+    const docRef = db.collection("vectordb").doc();
+    const data = {
+      uid,
+      source,
+      key,
+      uploadedAt: uploaded_at || new Date().toISOString(),
+    };
+    await docRef.set(data);
+    return { docId: docRef.id, ...data };
   }
 
   // 특정 유저의 Vector 목록 조회
   async getVectorsByUid(uid) {
-    const conn = await pool.getConnection();
-    try {
-      const query = `
-        SELECT * FROM vectordb WHERE uid = ? ORDER BY uploaded_at DESC
-      `;
-      const [rows] = await conn.query(query, [uid]);
-      return rows;
-    } finally {
-      conn.release();
-    }
+    const snap = await db
+      .collection("vectordb")
+      .where("uid", "==", uid)
+      .orderBy("uploadedAt", "desc")
+      .get();
+
+    return snap.docs.map((doc) => ({ docId: doc.id, ...doc.data() }));
   }
 
-  // ExamVector 연결 생성 (다중 삽입)
-  async createExamVectors(examId, fileIds) {
-    if (!fileIds || fileIds.length === 0) return;
-    const conn = await pool.getConnection();
-    try {
-      const query = `
-        INSERT INTO exam_vector (exam_id, file_id)
-        VALUES ?
-      `;
-      const values = fileIds.map((fileId) => [examId, fileId]);
-      await conn.query(query, [values]);
-    } finally {
-      conn.release();
-    }
-  }
-
-  // 특정 시험의 Vector 목록 조회 (키 포함)
-  async getVectorsByExamId(examId) {
-    const conn = await pool.getConnection();
-    try {
-      const query = `
-        SELECT v.* 
-        FROM vectordb v
-        JOIN exam_vector ev ON v.file_id = ev.file_id
-        WHERE ev.exam_id = ?
-      `;
-      const [rows] = await conn.query(query, [examId]);
-      return rows;
-    } finally {
-      conn.release();
-    }
-  }
-  
+  // key로 벡터 문서 삭제
   async deleteVectorByKey(key) {
-    const conn = await pool.getConnection();
-    try {
-      const query = `DELETE FROM vectordb WHERE \`key\` = ?`;
-      const [result] = await conn.execute(query, [key]);
-      return result;
-    } finally {
-      conn.release();
-    }
-  } 
+    const snap = await db.collection("vectordb").where("key", "==", key).get();
+
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    return snap.size;
+  }
+
+  // docId로 벡터 문서 단건 조회
+  async getVectorDocById(docId) {
+    const snap = await db.collection("vectordb").doc(docId).get();
+    if (!snap.exists) return null;
+    return { docId: snap.id, ...snap.data() };
+  }
+
+  // docId로 벡터 문서 삭제
+  async deleteVectorByDocId(docId) {
+    await db.collection("vectordb").doc(docId).delete();
+  }
+
+  // docId 목록으로 key 목록 조회 (세션 시작 시 RAG 서버에 전달)
+  async getKeysByDocIds(docIds) {
+    if (!docIds || docIds.length === 0) return [];
+    const snaps = await Promise.all(
+      docIds.map((id) => db.collection("vectordb").doc(id).get()),
+    );
+    return snaps.filter((s) => s.exists).map((s) => s.data().key);
+  }
 }
 
 module.exports = new VectorDbRepository();

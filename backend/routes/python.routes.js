@@ -1,12 +1,10 @@
+// backend/routes/python.routes.js
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const pythonSTTController = require("../controllers/python-stt.controller");
-const aiProxyController = require("../controllers/ai-proxy.controller");
-const logger = require("../config/logger");
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -34,50 +32,23 @@ const upload = multer({ storage: storage });
  *       200:
  *         description: Transcription result
  */
-router.post("/stt", upload.single("audio"), pythonSTTController.transcribeAudio);
-
-/**
- * @swagger
- * /api/python/session/start:
- *   post:
- *     tags: [Python]
- *     summary: Start AI Session
- */
-router.post("/session/start", aiProxyController.startSession);
-
-/**
- * @swagger
- * /api/python/session/answer:
- *   post:
- *     tags: [Python]
- *     summary: Submit Answer to AI Session
- */
-router.post("/session/answer", aiProxyController.submitAnswer);
-
-/**
- * @swagger
- * /api/python/session/resume:
- *   post:
- *     tags: [Python]
- *     summary: Resume AI Session
- */
-router.post("/session/resume", aiProxyController.resumeSession);
-
-/**
- * @swagger
- * /api/python/session/end:
- *   post:
- *     tags: [Python]
- *     summary: End AI Session
- */
-router.post("/session/end", aiProxyController.endSession);
+router.post(
+  "/stt",
+  upload.single("audio"),
+  pythonSTTController.transcribeAudio,
+);
 
 /**
  * @swagger
  * /api/python/health:
  *   get:
  *     tags: [Python]
- *     summary: Check Python Server Health
+ *     summary: Python AI Server Health Check
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *       503:
+ *         description: Server is unhealthy
  */
 router.get("/health", pythonSTTController.health);
 

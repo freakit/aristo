@@ -37,11 +37,6 @@ exports.transcribeAudio = async (req, res) => {
 
 exports.health = async (req, res) => {
   try {
-    const status = await pythonApiService.getHealthHealth();
-    // Wait, the method name in service is getHealth.
-    // I need to be careful. I added getHealth.
-    // Let me double check what I added to python-api.service.js
-    // I added: getHealth: async () => { ... }
     const result = await pythonApiService.getHealth();
     res.json(result);
   } catch (error) {
