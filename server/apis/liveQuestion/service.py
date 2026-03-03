@@ -3,6 +3,7 @@ Gemini Live Q&A 서비스 모듈
 - Gemini Live API (WebSocket) 세션 관리
 - ChromaDB RAG 검색 연동 (Function Calling)
 - 실시간 오디오 스트리밍 처리
+- 트랜스크립트 저장
 """
 
 import os
@@ -17,6 +18,7 @@ from google.genai import types
 
 from apis.rag.vectordb import VectorDBManager
 from apis.liveQuestion.prompts import LIVE_TUTOR_SYSTEM_PROMPT, LIVE_TUTOR_SYSTEM_PROMPT_KR
+from apis.liveQuestion.models import SessionStatus, TranscriptEntry
 
 # ====== 설정 ======
 
@@ -27,8 +29,8 @@ GEMINI_LIVE_MODEL = os.getenv(
 RAG_TOP_K = int(os.getenv("RAG_SEARCH_TOP_K", "5"))
 
 # 오디오 설정
-SEND_SAMPLE_RATE = 16000    # 입력: 16kHz 16-bit PCM mono
-RECEIVE_SAMPLE_RATE = 24000  # 출력: 24kHz 16-bit PCM mono
+SEND_SAMPLE_RATE    = 16000   # 입력: 16kHz 16-bit PCM mono
+RECEIVE_SAMPLE_RATE = 24000   # 출력: 24kHz 16-bit PCM mono
 
 # ====== 세션 저장소 (in-memory) ======
 live_sessions: Dict[str, Dict[str, Any]] = {}
@@ -117,12 +119,15 @@ def create_live_session(
         "exam_info": exam_info,
         "rag_keys": rag_keys,
         "system_prompt": system_prompt_override or LIVE_TUTOR_SYSTEM_PROMPT_KR,
-        "active": True,
+        "status": SessionStatus.PENDING,
+        "transcript": [],           # List[TranscriptEntry]
         "created_at": time.time(),
-        "gemini_session": None,  # Gemini Live 세션 객체 (WebSocket 연결 시 할당)
+        "ended_at": None,
+        "active": True,
+        "gemini_session": None,
     }
 
-    print(f"[{session_id}] 🎙️ Live 세션 생성됨")
+    print(f"[{session_id}] 🎙️ Live 세션 생성됨 (status=pending)")
     return session_id
 
 
@@ -136,33 +141,39 @@ def delete_live_session(session_id: str):
         print(f"[{session_id}] 🗑️ Live 세션 삭제됨")
 
 
+def _append_transcript(session: Dict[str, Any], role: str, text: str):
+    """트랜스크립트에 항목 추가"""
+    if text and text.strip():
+        entry = TranscriptEntry(role=role, text=text.strip(), timestamp=time.time())
+        session["transcript"].append(entry)
+
+
 def build_live_config(session: Dict[str, Any]) -> dict:
     """Gemini Live API 연결 설정 빌드"""
     system_prompt = session["system_prompt"]
 
-    # exam_info의 content가 있으면 시스템 프롬프트에 추가
     exam_content = session["exam_info"].get("content", "")
-    exam_name = session["exam_info"].get("name", "")
+    exam_name    = session["exam_info"].get("name", "")
     if exam_content:
-        system_prompt += f"\n\n## 시험 정보\n- 시험명: {exam_name}\n- 출제 범위/질문:\n{exam_content}"
+        system_prompt += (
+            f"\n\n## 시험 정보\n"
+            f"- 시험명: {exam_name}\n"
+            f"- 출제 범위/질문:\n{exam_content}"
+        )
 
-    config = {
+    return {
         "response_modalities": ["AUDIO"],
         "system_instruction": system_prompt,
         "tools": [{"function_declarations": [SEARCH_DB_DECLARATION]}],
     }
 
-    return config
 
+# ====== 세션 메인 루프 ======
 
 async def handle_live_session(session_id: str, websocket) -> None:
     """
     Gemini Live 세션의 메인 루프.
     프론트엔드 WebSocket ↔ Gemini Live API 간 브리지 역할.
-
-    Args:
-        session_id: 세션 ID
-        websocket: FastAPI WebSocket 객체
     """
     session = live_sessions.get(session_id)
     if not session:
@@ -170,15 +181,17 @@ async def handle_live_session(session_id: str, websocket) -> None:
         return
 
     rag_keys = session.get("rag_keys")
-    config = build_live_config(session)
+    config   = build_live_config(session)
 
-    # Gemini Live API 클라이언트 생성
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY가 설정되지 않았습니다."})
         return
 
     client = genai.Client(api_key=api_key)
+
+    # 상태: pending → active
+    session["status"] = SessionStatus.ACTIVE
 
     try:
         async with client.aio.live.connect(
@@ -187,21 +200,19 @@ async def handle_live_session(session_id: str, websocket) -> None:
         ) as gemini_session:
             session["gemini_session"] = gemini_session
 
-            # 클라이언트에게 준비 완료 알림
             await websocket.send_json({
                 "type": "ready",
                 "message": "Gemini Live 연결 완료. 오디오 스트리밍을 시작하세요.",
                 "data": {
-                    "send_sample_rate": SEND_SAMPLE_RATE,
+                    "send_sample_rate":    SEND_SAMPLE_RATE,
                     "receive_sample_rate": RECEIVE_SAMPLE_RATE,
                 },
             })
-            print(f"[{session_id}] ✅ Gemini Live 연결 완료")
+            print(f"[{session_id}] ✅ Gemini Live 연결 완료 (status=active)")
 
-            # 비동기 태스크 실행
             async with asyncio.TaskGroup() as tg:
-                tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session))
-                tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys))
+                tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
+                tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys, session))
 
     except asyncio.CancelledError:
         print(f"[{session_id}] 세션 취소됨")
@@ -212,19 +223,29 @@ async def handle_live_session(session_id: str, websocket) -> None:
         except Exception:
             pass
     finally:
-        session["active"] = False
-        session["gemini_session"] = None
-        print(f"[{session_id}] 🔌 Gemini Live 연결 종료")
+        _finish_session(session_id)
+        print(f"[{session_id}] 🔌 Gemini Live 연결 종료 (status=completed)")
 
+
+def _finish_session(session_id: str):
+    """세션 종료 처리"""
+    session = live_sessions.get(session_id)
+    if session:
+        session["status"]       = SessionStatus.COMPLETED
+        session["active"]       = False
+        session["ended_at"]     = time.time()
+        session["gemini_session"] = None
+
+
+# ====== 내부 태스크 ======
 
 async def _forward_client_to_gemini(
     session_id: str,
     websocket,
     gemini_session,
+    session: Dict[str, Any],
 ) -> None:
-    """
-    클라이언트 → Gemini: 오디오 바이너리 & 텍스트 메시지 포워딩
-    """
+    """클라이언트 → Gemini: 오디오 바이너리 & 텍스트 메시지 포워딩"""
     try:
         while True:
             message = await websocket.receive()
@@ -233,27 +254,26 @@ async def _forward_client_to_gemini(
                 print(f"[{session_id}] 클라이언트 연결 해제")
                 break
 
-            # 바이너리 데이터 = PCM 오디오
+            # 바이너리 = PCM 오디오
             if "bytes" in message and message["bytes"]:
-                audio_data = message["bytes"]
                 await gemini_session.send_realtime_input(
-                    audio={"data": audio_data, "mime_type": "audio/pcm"}
+                    audio={"data": message["bytes"], "mime_type": "audio/pcm"}
                 )
 
-            # 텍스트 데이터 = JSON 제어 메시지
+            # 텍스트 = JSON 제어 메시지
             elif "text" in message and message["text"]:
                 try:
                     msg = json.loads(message["text"])
                     msg_type = msg.get("type", "")
 
                     if msg_type == "end":
-                        print(f"[{session_id}] 클라이언트가 세션 종료 요청")
+                        print(f"[{session_id}] 클라이언트 세션 종료 요청")
                         break
 
                     elif msg_type == "text":
-                        # 텍스트 입력 (타이핑)
                         text_content = msg.get("content", "")
                         if text_content:
+                            _append_transcript(session, "user_text", text_content)
                             await gemini_session.send_client_content(
                                 turns={"parts": [{"text": text_content}]}
                             )
@@ -268,16 +288,16 @@ async def _forward_gemini_to_client(
     session_id: str,
     websocket,
     gemini_session,
-    rag_keys: Optional[List[str]] = None,
+    rag_keys: Optional[List[str]],
+    session: Dict[str, Any],
 ) -> None:
-    """
-    Gemini → 클라이언트: 오디오 응답 & tool_call 처리
-    """
+    """Gemini → 클라이언트: 오디오 응답 & tool_call 처리"""
     try:
         while True:
             turn = gemini_session.receive()
             async for response in turn:
-                # 1) 오디오 데이터 → 클라이언트에 바이너리로 전송
+
+                # 1) 오디오 → 클라이언트로 바이너리 전송
                 if response.data is not None:
                     await websocket.send_bytes(response.data)
 
@@ -288,24 +308,22 @@ async def _forward_gemini_to_client(
                         response.tool_call, rag_keys,
                     )
 
-                # 3) 서버 컨텐츠 (텍스트, 모델 턴 완료 등)
+                # 3) 서버 컨텐츠 (텍스트, 턴 완료)
                 elif response.server_content:
                     sc = response.server_content
 
-                    # 모델의 텍스트 출력이 있으면 transcript로 전달
                     if sc.model_turn:
                         for part in sc.model_turn.parts:
                             if hasattr(part, "text") and part.text:
+                                # 트랜스크립트 저장
+                                _append_transcript(session, "ai", part.text)
                                 await websocket.send_json({
                                     "type": "transcript",
                                     "message": part.text,
                                 })
 
-                    # 턴 종료 시그널
                     if sc.turn_complete:
-                        await websocket.send_json({
-                            "type": "turn_complete",
-                        })
+                        await websocket.send_json({"type": "turn_complete"})
 
     except asyncio.CancelledError:
         raise
@@ -326,37 +344,32 @@ async def _handle_tool_calls(
     for fc in tool_call.function_calls:
         print(f"[{session_id}] 🔧 Tool Call: {fc.name}({fc.args})")
 
-        # 클라이언트에게 도구 호출 시작 알림
         await websocket.send_json({
             "type": "tool_call_start",
-            "message": f"학습 자료 검색 중...",
-            "data": {"tool": fc.name, "args": fc.args},
+            "message": "학습 자료 검색 중...",
+            "data": {"tool": fc.name, "args": dict(fc.args)},
         })
 
         if fc.name == "search_db":
             query = fc.args.get("query", "")
-            # 블로킹 검색을 스레드풀에서 실행
-            loop = asyncio.get_running_loop()
+            loop  = asyncio.get_running_loop()
             result_text = await loop.run_in_executor(
                 None, execute_search_db, query, rag_keys,
             )
         else:
             result_text = f"알 수 없는 도구: {fc.name}"
 
-        function_response = types.FunctionResponse(
+        function_responses.append(types.FunctionResponse(
             id=fc.id,
             name=fc.name,
             response={"result": result_text},
-        )
-        function_responses.append(function_response)
+        ))
 
-        # 클라이언트에게 도구 호출 완료 알림
         await websocket.send_json({
             "type": "tool_call_end",
             "message": "검색 완료. 응답 생성 중...",
             "data": {"tool": fc.name},
         })
 
-    # Gemini에게 도구 응답 전송
     await gemini_session.send_tool_response(function_responses=function_responses)
     print(f"[{session_id}] ✅ Tool Response 전송 완료 ({len(function_responses)}개)")
