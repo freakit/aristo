@@ -32,6 +32,7 @@ from common.ai_client import (
 )
 from apis.question.prompts import (
     MISSING_SYSTEM_PROMPT, FOLLOWUP_SYSTEM_PROMPT, BONUS_SYSTEM_PROMPT,
+    CLARIFICATION_SYSTEM_PROMPT,
 )
 from apis.question.tree import (
     Node, create_initial_tree, reconstruct_tree,
@@ -45,6 +46,31 @@ global_sem = asyncio.Semaphore(EXECUTOR_SEM)
 
 # ====== 세션 저장소 (in-memory) ======
 sessions: Dict[str, Dict[str, Any]] = {}
+
+
+# ====== 학생 질문 감지 ======
+
+def check_student_question(
+    tutor_question: str,
+    student_input: str,
+) -> Dict[str, Any]:
+    """
+    학생의 입력이 평가 질문에 대한 '답변'이 아닌 '질문/요청'인지 판별.
+    is_question=True이면 clarification 텍스트 반환.
+    """
+    user_message = (
+        f"TUTOR_QUESTION: {tutor_question}\n\n"
+        f"STUDENT_INPUT: {student_input}"
+    )
+    messages = [
+        {"role": "system", "content": CLARIFICATION_SYSTEM_PROMPT},
+        {"role": "user", "content": user_message},
+    ]
+    result = ai_call(messages)
+    parsed = parse_json_response(result)
+    if parsed and isinstance(parsed, dict):
+        return parsed
+    return {"is_question": False, "clarification": None}
 
 
 async def run_blocking(func, *args, **kwargs):
@@ -412,6 +438,21 @@ async def submit_answer(session_id: str, user_input: str) -> Dict[str, Any]:
     root = session["root"]
     current_node = session["current_node"]
     rag_keys = session.get("rag_keys")
+
+    # ── 학생 질문 감지: 답변 대신 질문을 했으면 현재 노드 유지 ──
+    tutor_question = current_node.value.get("follow_up", {}).get("question", "")
+    if tutor_question:
+        detection = await run_blocking(check_student_question, tutor_question, user_input)
+        if detection.get("is_question"):
+            clarification = detection.get("clarification", "")
+            print(f"[{session_id}] ❓ 학생 질문 감지 → 현재 노드 유지")
+            return {
+                "session_id": session_id,
+                "type": "clarification",
+                "message": f"{clarification}\n\n{tutor_question}",
+                "clarification": clarification,
+                "repeated_question": tutor_question,
+            }
 
     # 답변 저장
     current_node.value["student_answer"]["answer"] = user_input

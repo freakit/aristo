@@ -49,17 +49,17 @@ app.mount("/figures", StaticFiles(directory=str(figures_dir)), name="figures")
 
 
 # ====== 라우터 등록 ======
-from apis.question.router import router as question_router
-from apis.tutor.router import router as tutor_router
+# from apis.question.router import router as question_router  # ← liveQuestion으로 대체됨
 from apis.stt.router import router as stt_router
 from apis.voice.router import router as voice_router
 from apis.rag.router import router as rag_router
+from apis.liveQuestion.router import router as live_question_router
 
-app.include_router(question_router)
-app.include_router(tutor_router)
+# app.include_router(question_router)  # ← liveQuestion으로 대체됨
 app.include_router(stt_router)
 app.include_router(voice_router)
 app.include_router(rag_router)
+app.include_router(live_question_router)
 
 
 # ====== 공통 엔드포인트 ======
@@ -72,16 +72,17 @@ async def root():
         "version": "3.0.0",
         "timestamp": datetime.now().isoformat(),
         "apis": {
-            "question": {
-                "prefix": "/api/question",
-                "description": "문제 출제 (소크라틱 Q&A 평가)",
+            "live_question": {
+                "prefix": "/api/live-question",
+                "description": "실시간 음성 문제 출제 (Gemini Live + RAG)",
                 "endpoints": {
-                    "start": "POST /api/question/start",
-                    "answer": "POST /api/question/answer",
-                    "continue": "POST /api/question/continue",
-                    "end": "POST /api/question/end",
-                    "session": "GET /api/question/session/{id}",
-                    "sessions": "GET /api/question/sessions",
+                    "create_session":   "POST   /api/live-question/session",
+                    "websocket":        "WS     /api/live-question/ws/{session_id}",
+                    "get_session":      "GET    /api/live-question/session/{session_id}",
+                    "get_transcript":   "GET    /api/live-question/session/{session_id}/transcript",
+                    "get_result":       "GET    /api/live-question/session/{session_id}/result",
+                    "list_sessions":    "GET    /api/live-question/sessions",
+                    "delete_session":   "DELETE /api/live-question/session/{session_id}",
                 },
             },
             "stt": {
@@ -103,16 +104,16 @@ async def root():
                 "prefix": "/api/rag",
                 "description": "RAG 파이프라인 (PDF → 청킹 → 임베딩 → 검색 → 챗봇)",
                 "endpoints": {
-                    "chunk_pdfs": "POST /api/rag/chunk-pdfs",
-                    "embed_chunks": "POST /api/rag/embed-chunks",
-                    "search": "POST /api/rag/search",
-                    "chat": "POST /api/rag/chat",
-                    "sources": "GET /api/rag/sources",
-                    "delete_source": "DELETE /api/rag/sources/{source}",
-                    "db_info": "GET /api/rag/db-info",
-                    "chunked_files": "GET /api/rag/chunked-files",
-                    "download": "GET /api/rag/download/{filename}",
-                    "processing_logs": "GET /api/rag/processing-logs",
+                    "chunk_pdfs":       "POST   /api/rag/chunk-pdfs",
+                    "embed_chunks":     "POST   /api/rag/embed-chunks",
+                    "search":           "POST   /api/rag/search",
+                    "chat":             "POST   /api/rag/chat",
+                    "sources":          "GET    /api/rag/sources",
+                    "delete_source":    "DELETE /api/rag/sources/{source}",
+                    "db_info":          "GET    /api/rag/db-info",
+                    "chunked_files":    "GET    /api/rag/chunked-files",
+                    "download":         "GET    /api/rag/download/{filename}",
+                    "processing_logs":  "GET    /api/rag/processing-logs",
                 },
             },
         },
@@ -140,11 +141,11 @@ async def startup_event():
     # AI 클라이언트 초기화
     init_ai_client()
 
-    print(f"📋 Question API: /api/question  (소크라틱 평가)")
-    print(f"🎓 Tutor API:    /api/tutor     (AI 튜터 모드)")
-    print(f"🎤 STT API:      /api/stt")
-    print(f"🔊 Voice API:    /api/voice")
-    print(f"📚 RAG API:      /api/rag")
+    print(f"📋 Question API:      /api/question")
+    print(f"🎙️ Live Question API: /api/live-question")
+    print(f"🎤 STT API:           /api/stt")
+    print(f"🔊 Voice API:         /api/voice")
+    print(f"📚 RAG API:           /api/rag")
     print(f"📖 Swagger Docs: http://{HOST}:{PORT}/docs")
     print("=" * 50)
 
