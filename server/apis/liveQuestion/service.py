@@ -2,6 +2,7 @@
 Gemini Live Q&A 서비스 모듈
 - Gemini Live API (WebSocket) 세션 관리
 - ChromaDB RAG 검색 연동 (Function Calling)
+- Missing / Completed 포인트 추적 (add_missing_point / mark_completed)
 - 실시간 오디오 스트리밍 처리
 - 트랜스크립트 저장
 """
@@ -10,6 +11,7 @@ import os
 import time
 import asyncio
 import json
+from pathlib import Path
 from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
@@ -32,6 +34,9 @@ RAG_TOP_K = int(os.getenv("RAG_SEARCH_TOP_K", "5"))
 SEND_SAMPLE_RATE    = 16000   # 입력: 16kHz 16-bit PCM mono
 RECEIVE_SAMPLE_RATE = 24000   # 출력: 24kHz 16-bit PCM mono
 
+# Missing / Completed 파일 저장 기본 경로
+SESSIONS_DIR = Path(__file__).parent.parent.parent / "sessions"
+
 # ====== 세션 저장소 (in-memory) ======
 live_sessions: Dict[str, Dict[str, Any]] = {}
 
@@ -47,7 +52,7 @@ def get_vector_db() -> VectorDBManager:
     return _vector_db
 
 
-# ====== search_db 도구 정의 ======
+# ====== Tool 선언 ======
 
 SEARCH_DB_DECLARATION = {
     "name": "search_db",
@@ -68,6 +73,103 @@ SEARCH_DB_DECLARATION = {
     },
 }
 
+ADD_MISSING_POINT_DECLARATION = {
+    "name": "add_missing_point",
+    "description": (
+        "학생이 답변에서 누락했거나 불충분하게 설명한 개념/포인트를 Missing 목록에 등록합니다. "
+        "학생의 답변을 평가한 후, 부족하다고 판단되는 부분마다 이 도구를 호출하세요. "
+        "이미 Missing 목록에 있는 항목은 중복 등록하지 마세요."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "point": {
+                "type": "string",
+                "description": "누락된 개념이나 설명 부족 포인트를 한 문장으로 간결하게 작성하세요. 예: '스택의 push/pop 시간복잡도 미언급'",
+            },
+        },
+        "required": ["point"],
+    },
+}
+
+MARK_COMPLETED_DECLARATION = {
+    "name": "mark_completed",
+    "description": (
+        "Missing 목록에 있는 항목이 해결되었을 때 호출합니다. "
+        "학생이 해당 개념을 올바르게 설명했거나, AI 튜터가 직접 설명을 완료했을 때 사용하세요. "
+        "해당 항목은 Missing에서 제거되고 Completed로 이동됩니다."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "point": {
+                "type": "string",
+                "description": "완료된 항목 — Missing 목록에 등록된 것과 정확히 같은 텍스트를 사용하세요.",
+            },
+            "how_resolved": {
+                "type": "string",
+                "description": "어떻게 해결되었는지 간단히 설명. 예: '학생이 올바르게 설명함' 또는 'AI가 직접 설명함'",
+            },
+        },
+        "required": ["point", "how_resolved"],
+    },
+}
+
+
+# ====== MD 파일 관리 ======
+
+def get_session_dir(session_id: str) -> Path:
+    session_dir = SESSIONS_DIR / session_id
+    session_dir.mkdir(parents=True, exist_ok=True)
+    return session_dir
+
+
+def save_md_files(session_id: str) -> None:
+    """Missing.md 와 Completed.md 를 디스크에 저장"""
+    session = live_sessions.get(session_id)
+    if not session:
+        return
+
+    session_dir = get_session_dir(session_id)
+    missing_points    = session.get("missing_points", [])
+    completed_points  = session.get("completed_points", [])
+
+    # Missing.md
+    missing_lines = ["# Missing Points\n",
+                     "_학생이 누락하거나 불충분하게 설명한 항목들_\n\n"]
+    if missing_points:
+        for p in missing_points:
+            missing_lines.append(f"- [ ] {p}\n")
+    else:
+        missing_lines.append("_(없음)_\n")
+
+    (session_dir / "Missing.md").write_text(
+        "".join(missing_lines), encoding="utf-8"
+    )
+
+    # Completed.md
+    completed_lines = ["# Completed Points\n",
+                       "_해결되거나 AI가 직접 설명한 항목들_\n\n"]
+    if completed_points:
+        for entry in completed_points:
+            point        = entry.get("point", "")
+            how_resolved = entry.get("how_resolved", "")
+            completed_lines.append(f"- [x] {point}")
+            if how_resolved:
+                completed_lines.append(f"  _(→ {how_resolved})_")
+            completed_lines.append("\n")
+    else:
+        completed_lines.append("_(없음)_\n")
+
+    (session_dir / "Completed.md").write_text(
+        "".join(completed_lines), encoding="utf-8"
+    )
+
+    print(f"[{session_id}] 📄 MD 파일 저장됨 "
+          f"(missing={len(missing_points)}, completed={len(completed_points)})")
+
+
+# ====== Tool 실행 함수 ======
 
 def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
     """
@@ -103,6 +205,52 @@ def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
         return f"검색 중 오류 발생: {str(e)}"
 
 
+def execute_add_missing_point(session_id: str, point: str) -> str:
+    """Missing 목록에 포인트 추가"""
+    session = live_sessions.get(session_id)
+    if not session:
+        return "세션을 찾을 수 없습니다."
+
+    missing = session.setdefault("missing_points", [])
+
+    # 중복 방지
+    if point in missing:
+        return f"이미 Missing 목록에 있습니다: {point}"
+
+    missing.append(point)
+    save_md_files(session_id)
+
+    print(f"[{session_id}] ➕ Missing 추가: {point}")
+    return f"Missing 목록에 추가됨: '{point}' (현재 {len(missing)}개)"
+
+
+def execute_mark_completed(session_id: str, point: str, how_resolved: str) -> str:
+    """Missing → Completed 이동"""
+    session = live_sessions.get(session_id)
+    if not session:
+        return "세션을 찾을 수 없습니다."
+
+    missing    = session.setdefault("missing_points", [])
+    completed  = session.setdefault("completed_points", [])
+
+    if point not in missing:
+        # 목록에 없어도 Completed에는 추가 (유연성)
+        print(f"[{session_id}] ⚠️ mark_completed: Missing에 없는 항목: {point}")
+    else:
+        missing.remove(point)
+
+    completed.append({"point": point, "how_resolved": how_resolved, "timestamp": time.time()})
+    save_md_files(session_id)
+
+    print(f"[{session_id}] ✅ Completed 이동: {point} ({how_resolved})")
+    remaining = len(missing)
+    return (
+        f"'{point}' → Completed 이동 완료. "
+        f"남은 Missing: {remaining}개"
+        + (" - 모든 항목 해결됨!" if remaining == 0 else "")
+    )
+
+
 # ====== 세션 관리 ======
 
 def create_live_session(
@@ -121,11 +269,16 @@ def create_live_session(
         "system_prompt": system_prompt_override or LIVE_TUTOR_SYSTEM_PROMPT_KR,
         "status": SessionStatus.PENDING,
         "transcript": [],           # List[TranscriptEntry]
+        "missing_points": [],       # List[str]
+        "completed_points": [],     # List[Dict] {point, how_resolved, timestamp}
         "created_at": time.time(),
         "ended_at": None,
         "active": True,
         "gemini_session": None,
     }
+
+    # 초기 빈 MD 파일 생성
+    save_md_files(session_id)
 
     print(f"[{session_id}] 🎙️ Live 세션 생성됨 (status=pending)")
     return session_id
@@ -152,19 +305,34 @@ def build_live_config(session: Dict[str, Any]) -> dict:
     """Gemini Live API 연결 설정 빌드"""
     system_prompt = session["system_prompt"]
 
-    exam_content = session["exam_info"].get("content", "")
-    exam_name    = session["exam_info"].get("name", "")
-    if exam_content:
+    exam_content      = session["exam_info"].get("content", "")
+    exam_name         = session["exam_info"].get("name", "")
+    first_question    = session["exam_info"].get("first_question", "")
+
+    if exam_content or exam_name:
         system_prompt += (
             f"\n\n## 시험 정보\n"
             f"- 시험명: {exam_name}\n"
-            f"- 출제 범위/질문:\n{exam_content}"
+            f"- 움제 범위/안내:\n{exam_content}"
+        )
+
+    if first_question:
+        system_prompt += (
+            f"\n\n## 첫 번째 질문 (시스템 제공)\n"
+            f"세션이 시작되면 다음 질문을 학생에게 말해주세요:\n"
+            f"\"{first_question}\""
         )
 
     return {
         "response_modalities": ["AUDIO"],
         "system_instruction": system_prompt,
-        "tools": [{"function_declarations": [SEARCH_DB_DECLARATION]}],
+        "tools": [{
+            "function_declarations": [
+                SEARCH_DB_DECLARATION,
+                ADD_MISSING_POINT_DECLARATION,
+                MARK_COMPLETED_DECLARATION,
+            ]
+        }],
     }
 
 
@@ -210,6 +378,11 @@ async def handle_live_session(session_id: str, websocket) -> None:
             })
             print(f"[{session_id}] ✅ Gemini Live 연결 완료 (status=active)")
 
+            # 첫 질문 시스템 주입
+            first_question = session["exam_info"].get("first_question", "")
+            if first_question:
+                await _inject_first_question(session_id, gemini_session, first_question)
+
             async with asyncio.TaskGroup() as tg:
                 tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
                 tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys, session))
@@ -235,6 +408,33 @@ def _finish_session(session_id: str):
         session["active"]       = False
         session["ended_at"]     = time.time()
         session["gemini_session"] = None
+        # 최종 MD 파일 저장
+        save_md_files(session_id)
+
+
+# ====== 첫 질문 주입 ======
+
+async def _inject_first_question(
+    session_id: str,
+    gemini_session,
+    first_question: str,
+) -> None:
+    """
+    세션 시작 시 시스템이 첫 번째 질문을 Gemini에 주입.
+    Gemini는 이 텍스트를 받아 음성으로 학생에게 질문한다.
+    """
+    instruction = (
+        f"지금 학생에게 다음 질문을 음성으로 말해주세요. "
+        f"질문 외에 다른 말은 하지 마세요:\n\n\"{first_question}\""
+    )
+    try:
+        await gemini_session.send_client_content(
+            turns={"parts": [{"text": instruction}]},
+            turn_complete=True,
+        )
+        print(f"[{session_id}] 💬 첫 질문 주입됨: {first_question[:50]}...")
+    except Exception as e:
+        print(f"[{session_id}] ⚠️ 첫 질문 주입 실패: {e}")
 
 
 # ====== 내부 태스크 ======
@@ -301,7 +501,7 @@ async def _forward_gemini_to_client(
                 if response.data is not None:
                     await websocket.send_bytes(response.data)
 
-                # 2) Tool Call → search_db 실행 → tool_response 전송
+                # 2) Tool Call → 실행 → tool_response 전송
                 elif response.tool_call:
                     await _handle_tool_calls(
                         session_id, gemini_session, websocket,
@@ -315,7 +515,6 @@ async def _forward_gemini_to_client(
                     if sc.model_turn:
                         for part in sc.model_turn.parts:
                             if hasattr(part, "text") and part.text:
-                                # 트랜스크립트 저장
                                 _append_transcript(session, "ai", part.text)
                                 await websocket.send_json({
                                     "type": "transcript",
@@ -340,22 +539,55 @@ async def _handle_tool_calls(
 ) -> None:
     """Gemini의 tool_call을 처리하고 결과를 돌려보냄"""
     function_responses = []
+    loop = asyncio.get_running_loop()
 
     for fc in tool_call.function_calls:
         print(f"[{session_id}] 🔧 Tool Call: {fc.name}({fc.args})")
 
         await websocket.send_json({
             "type": "tool_call_start",
-            "message": "학습 자료 검색 중...",
+            "message": _tool_start_message(fc.name),
             "data": {"tool": fc.name, "args": dict(fc.args)},
         })
 
+        # ── 도구별 실행 ──
         if fc.name == "search_db":
             query = fc.args.get("query", "")
-            loop  = asyncio.get_running_loop()
             result_text = await loop.run_in_executor(
                 None, execute_search_db, query, rag_keys,
             )
+
+        elif fc.name == "add_missing_point":
+            point = fc.args.get("point", "")
+            result_text = execute_add_missing_point(session_id, point)
+
+            # 프론트엔드에 Missing 목록 변경 알림
+            session = live_sessions.get(session_id)
+            if session:
+                await websocket.send_json({
+                    "type": "missing_update",
+                    "data": {
+                        "missing_points":   session.get("missing_points", []),
+                        "completed_points": [e["point"] for e in session.get("completed_points", [])],
+                    },
+                })
+
+        elif fc.name == "mark_completed":
+            point        = fc.args.get("point", "")
+            how_resolved = fc.args.get("how_resolved", "")
+            result_text = execute_mark_completed(session_id, point, how_resolved)
+
+            # 프론트엔드에 Completed 목록 변경 알림
+            session = live_sessions.get(session_id)
+            if session:
+                await websocket.send_json({
+                    "type": "completed_update",
+                    "data": {
+                        "missing_points":   session.get("missing_points", []),
+                        "completed_points": [e["point"] for e in session.get("completed_points", [])],
+                    },
+                })
+
         else:
             result_text = f"알 수 없는 도구: {fc.name}"
 
@@ -367,9 +599,25 @@ async def _handle_tool_calls(
 
         await websocket.send_json({
             "type": "tool_call_end",
-            "message": "검색 완료. 응답 생성 중...",
+            "message": _tool_end_message(fc.name),
             "data": {"tool": fc.name},
         })
 
     await gemini_session.send_tool_response(function_responses=function_responses)
     print(f"[{session_id}] ✅ Tool Response 전송 완료 ({len(function_responses)}개)")
+
+
+def _tool_start_message(tool_name: str) -> str:
+    return {
+        "search_db":         "학습 자료 검색 중...",
+        "add_missing_point": "누락 포인트 기록 중...",
+        "mark_completed":    "완료 항목 처리 중...",
+    }.get(tool_name, f"도구 실행 중: {tool_name}")
+
+
+def _tool_end_message(tool_name: str) -> str:
+    return {
+        "search_db":         "검색 완료. 응답 생성 중...",
+        "add_missing_point": "Missing.md 업데이트됨.",
+        "mark_completed":    "Completed.md 업데이트됨.",
+    }.get(tool_name, f"도구 완료: {tool_name}")

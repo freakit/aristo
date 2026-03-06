@@ -26,8 +26,9 @@ async def create_session() -> str:
             json={
                 "student_info": {"name": "테스트학생", "id": "T001"},
                 "exam_info": {
-                    "name": "테스트시험",
-                    "content": "자료구조에서 스택(Stack)이란 무엇인지 설명해보세요.",
+                    "name": "자료구조 테스트",
+                    "content": "스택(Stack)의 개념과 활용에 관한 평가입니다.",
+                    "first_question": "스택(Stack)이 무엇인지 설명해보세요. 특징과 실제 사용 예시도 함께 말해주세요.",
                 },
                 "rag_keys": None,
             },

@@ -4,7 +4,7 @@ Gemini Live Q&A API의 요청/응답 모델
 
 import time
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -87,6 +87,8 @@ class SessionResultResponse(BaseModel):
     student_info: Dict[str, Any]
     exam_info: Dict[str, Any]
     transcript: List[TranscriptEntry]
+    missing_points: List[str] = Field(default_factory=list)
+    completed_points: List[Dict[str, Any]] = Field(default_factory=list)
     duration_seconds: Optional[float] = None
     created_at: float
     ended_at: Optional[float] = None

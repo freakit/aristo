@@ -23,6 +23,7 @@ from apis.liveQuestion.service import (
     delete_live_session,
     handle_live_session,
     live_sessions,
+    get_session_dir,
 )
 
 router = APIRouter(prefix="/api/live-question", tags=["Live Question - 실시간 문제 출제"])
@@ -131,6 +132,8 @@ async def api_get_result(session_id: str):
         student_info=session.get("student_info", {}),
         exam_info=session.get("exam_info", {}),
         transcript=session.get("transcript", []),
+        missing_points=session.get("missing_points", []),
+        completed_points=session.get("completed_points", []),
         duration_seconds=duration,
         created_at=created_at,
         ended_at=ended_at,
@@ -163,6 +166,44 @@ async def api_delete_session(session_id: str):
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
     delete_live_session(session_id)
     return {"message": "세션이 삭제되었습니다.", "session_id": session_id}
+
+
+@router.get("/session/{session_id}/missing", summary="Missing 포인트 목록 조회")
+async def api_get_missing(session_id: str):
+    """
+    ## Missing 포인트 목록 조회
+
+    현재 세션에서 학생이 누락하거나 불충분하게 설명한 항목 목록을 반환합니다.
+    """
+    session = get_live_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+
+    missing = session.get("missing_points", [])
+    return {
+        "session_id": session_id,
+        "missing_points": missing,
+        "total": len(missing),
+    }
+
+
+@router.get("/session/{session_id}/completed", summary="Completed 포인트 목록 조회")
+async def api_get_completed(session_id: str):
+    """
+    ## Completed 포인트 목록 조회
+
+    현재 세션에서 해결되거나 AI가 직접 설명한 항목 목록을 반환합니다.
+    """
+    session = get_live_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+
+    completed = session.get("completed_points", [])
+    return {
+        "session_id": session_id,
+        "completed_points": completed,
+        "total": len(completed),
+    }
 
 
 # ====== WebSocket 엔드포인트 ======
