@@ -97,11 +97,11 @@ class VectorDBManager:
             metadata={"hnsw:space": "cosine"}  # 코사인 유사도 사용
         )
         
-        print(f"VectorDB 초기화 완료")
-        print(f"  - 저장 경로: {self.persist_directory}")
-        print(f"  - 컬렉션: {collection_name}")
-        print(f"  - 임베딩: Gemini")
-        print(f"  - 현재 문서 수: {self.collection.count()}")
+        print(f"VectorDB initialized")
+        print(f"  - DB Path: {self.persist_directory}")
+        print(f"  - Collection: {collection_name}")
+        print(f"  - Embedding: Gemini")
+        print(f"  - Current documents: {self.collection.count()}")
     
     def add_chunks(
         self,
@@ -119,10 +119,10 @@ class VectorDBManager:
             추가된 청크 수
         """
         if not chunks:
-            print("추가할 청크가 없습니다.")
+            print("No chunks to add.")
             return 0
         
-        print(f"\n청크 {len(chunks)}개 추가 시작...")
+        print(f"\nAdding {len(chunks)} chunks...")
         
         added_count = 0
         
@@ -167,10 +167,10 @@ class VectorDBManager:
             )
             
             added_count += len(batch)
-            print(f"  - {added_count}/{len(chunks)} 청크 추가됨")
+            print(f"  - {added_count}/{len(chunks)} chunks added")
         
-        print(f"✓ 총 {added_count}개 청크 추가 완료")
-        print(f"  - 현재 DB 문서 수: {self.collection.count()}")
+        print(f"Total {added_count} chunks added successfully")
+        print(f"  - Current DB count: {self.collection.count()}")
         
         return added_count
     

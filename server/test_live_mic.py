@@ -44,7 +44,7 @@ async def create_session() -> str:
         )
         resp.raise_for_status()
         data = resp.json()
-        print(f"✅ 세션 생성: {data['session_id']}")
+        print(f"[OK] 세션 생성: {data['session_id']}")
         return data["session_id"]
 
 
@@ -148,7 +148,7 @@ async def run_mic_test():
             if msg.get("type") != "ready":
                 print(f"❌ 예상치 못한 응답: {msg}")
                 return
-            print(f"✅ Gemini Live 연결됨\n")
+            print(f"[OK] Gemini Live 연결됨\n")
 
             # 마이크 → WS, WS → 스피커 동시 실행
             async with asyncio.TaskGroup() as tg:

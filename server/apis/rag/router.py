@@ -175,18 +175,18 @@ async def process_pdf_background(
                 lambda: db_manager.add_from_json(str(temp_chunked))
             )
 
-            add_log(key, f"✅ 임베딩 완료: {chunks_added}개 청크 저장됨")
+            add_log(key, f"[OK] 임베딩 완료: {chunks_added}개 청크 저장됨")
             
             # 성공 로그
             upload_logs[key].put({
                 "status": "success",
-                "message": f"✅ 전체 처리 완료: {file_name}",
+                "message": f"[OK] 전체 처리 완료: {file_name}",
                 "chunks_added": chunks_added,
                 "timestamp": datetime.now().isoformat()
             })
 
     except Exception as e:
-        error_msg = f"❌ 오류 발생: {str(e)}"
+        error_msg = f"[Error] 오류 발생: {str(e)}"
         add_log(key, error_msg)
         upload_logs[key].put({
             "status": "error",
@@ -227,7 +227,7 @@ async def upload_and_process_pdf(
     upload_logs[key] = Queue()
     upload_locks[key] = Lock()
     
-    add_log(key, f"📤 업로드 시작: {file.filename}")
+    add_log(key, f"[Upload] 업로드 시작: {file.filename}")
 
     temp_pdf = TEMP_DIR / f"{key}_{file.filename}"
     try:
@@ -235,7 +235,7 @@ async def upload_and_process_pdf(
             content = await file.read()
             f.write(content)
         
-        add_log(key, f"✅ 파일 저장 완료, 백그라운드 처리 시작...")
+        add_log(key, f"[OK] 파일 저장 완료, 백그라운드 처리 시작...")
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"파일 저장 실패: {str(e)}")

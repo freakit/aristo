@@ -29,21 +29,21 @@ async def _generate_initial_goals(keys: List[str], aio_client) -> List[str]:
         db = get_vector_db()
         keys_filter = db._build_keys_filter(keys)
         if not keys_filter:
-            print("⚠️ keys_filter is empty. (Missing or invalid key list)")
+            print("[Warning] keys_filter is empty. (Missing or invalid key list)")
             return []
         docs = db.collection.get(where=keys_filter, include=["documents"])
         if not docs or not docs.get("documents"):
-            print("⚠️ No document content found. keys_filter:", keys_filter)
+            print("[Warning] No document content found. keys_filter:", keys_filter)
             return []
         return docs["documents"]
         
     doc_list = await loop.run_in_executor(None, fetch_docs)
     if not doc_list:
-        print("⚠️ doc_list is empty. Aborting extraction.")
+        print("[Warning] doc_list is empty. Aborting extraction.")
         return []
     
     text = "\n\n".join(doc_list[:50])
-    print(f"📄 Model input text: {text[:200]}... (Total {len(text)} chars)")
+    print(f"[Docs] Model input text: {text[:200]}... (Total {len(text)} chars)")
 
     prompt = (
         "Based on the following learning materials, extract exactly 3 core concepts or learning goals that the student must master today. "
@@ -57,7 +57,7 @@ async def _generate_initial_goals(keys: List[str], aio_client) -> List[str]:
             model="gemini-2.5-flash",
             contents=prompt
         )
-        print("💡 Gemini 응답:", response.text)
+        print("[Gemini] Response:", response.text)
         lines = response.text.strip().split("\n")
         goals = [line.strip("- *0123456789. ") for line in lines if line.strip()]
         return goals[:5]
@@ -208,7 +208,7 @@ def save_md_files(session_id: str) -> None:
         "".join(completed_lines), encoding="utf-8"
     )
 
-    print(f"[{session_id}] 📄 MD 파일 저장됨 "
+    print(f"[{session_id}] MD 파일 저장됨 "
           f"(missing={len(missing_points)}, completed={len(completed_points)})")
 
 
@@ -240,11 +240,11 @@ def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
                 chunks.append(f"{header}\n{text}" if header else text)
 
         result_text = "\n\n---\n\n".join(chunks)
-        print(f"🔍 [search_db] query='{query}' | results={len(results)} | length={len(result_text)}")
+        print(f"[Search] [search_db] query='{query}' | results={len(results)} | length={len(result_text)}")
         return result_text
 
     except Exception as e:
-        print(f"⚠️ [search_db] 검색 실패: {e}")
+        print(f"[Warning] [search_db] 검색 실패: {e}")
         return f"검색 중 오류 발생: {str(e)}"
 
 
@@ -278,14 +278,14 @@ def execute_mark_completed(session_id: str, point: str, how_resolved: str) -> st
 
     if point not in missing:
         # 목록에 없어도 Completed에는 추가 (유연성)
-        print(f"[{session_id}] ⚠️ mark_completed: Missing에 없는 항목: {point}")
+        print(f"[{session_id}] [Warning] mark_completed: Missing에 없는 항목: {point}")
     else:
         missing.remove(point)
 
     completed.append({"point": point, "how_resolved": how_resolved, "timestamp": time.time()})
     save_md_files(session_id)
 
-    print(f"[{session_id}] ✅ Moved to Completed: {point} ({how_resolved})")
+    print(f"[{session_id}] [OK] Moved to Completed: {point} ({how_resolved})")
     remaining = len(missing)
     return (
         f"'{point}' → Successfully moved to Completed. "
@@ -324,7 +324,7 @@ def create_live_session(
     # 초기 빈 MD 파일 생성
     save_md_files(session_id)
 
-    print(f"[{session_id}] 🎙️ Live 세션 생성됨 (status=pending)")
+    print(f"[{session_id}] [Live] Live 세션 생성됨 (status=pending)")
     return session_id
 
 
@@ -335,7 +335,7 @@ def get_live_session(session_id: str) -> Optional[Dict[str, Any]]:
 def delete_live_session(session_id: str):
     session = live_sessions.pop(session_id, None)
     if session:
-        print(f"[{session_id}] 🗑️ Live 세션 삭제됨")
+        print(f"[{session_id}] [Cleanup] Live 세션 삭제됨")
 
 
 def _append_transcript(session: Dict[str, Any], role: str, text: str):
@@ -433,7 +433,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
                     "receive_sample_rate": RECEIVE_SAMPLE_RATE,
                 },
             })
-            print(f"[{session_id}] ✅ Gemini Live connected (status=active)")
+            print(f"[{session_id}] [OK] Gemini Live connected (status=active)")
 
             # 첫 질문 시스템 주입
             first_question = session["exam_info"].get("first_question", "")
@@ -452,7 +452,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
             pass
     except Exception as e:
         err_msg = str(e)
-        print(f"[{session_id}] ❌ Gemini Live error: {err_msg}")
+        print(f"[{session_id}] [Error] Gemini Live error: {err_msg}")
         try:
             await websocket.send_json({"type": "error", "message": f"Gemini error: {err_msg}"})
         except Exception:
@@ -467,7 +467,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
             await websocket.send_json({"type": "session_end", "reason": "finished", "message": "세션이 종료되었습니다."})
         except Exception:
             pass
-        print(f"[{session_id}] 🔌 Gemini Live 연결 종료 (status=completed)")
+        print(f"[{session_id}] [Closed] Gemini Live 연결 종료 (status=completed)")
 
 
 def _finish_session(session_id: str):
@@ -502,9 +502,9 @@ async def _inject_first_question(
             turns={"parts": [{"text": instruction}]},
             turn_complete=True,
         )
-        print(f"[{session_id}] 💬 첫 질문 주입됨: {first_question[:50]}...")
+        print(f"[{session_id}] [Msg] 첫 질문 주입됨: {first_question[:50]}...")
     except Exception as e:
-        print(f"[{session_id}] ⚠️ 첫 질문 주입 실패: {e}")
+        print(f"[{session_id}] [Warning] 첫 질문 주입 실패: {e}")
 
 
 # ====== 내부 태스크 ======
@@ -552,7 +552,7 @@ async def _forward_client_to_gemini(
                             
                     elif msg_type == "end_turn":
                         # The user manually stopped the mic, so compel the AI to start speaking
-                        print(f"[{session_id}] 🛑 클라이언트 마이크 중지. 턴 종료 전송.")
+                        print(f"[{session_id}] [Stop] 클라이언트 마이크 중지. 턴 종료 전송.")
                         await gemini_session.send_client_content(turn_complete=True)
 
                     elif msg_type == "text":
@@ -566,7 +566,7 @@ async def _forward_client_to_gemini(
                     pass
 
     except Exception as e:
-        print(f"[{session_id}] ⚠️ 클라이언트→Gemini 포워딩 오류: {e}")
+        print(f"[{session_id}] [Warning] 클라이언트->Gemini 포워딩 오류: {e}")
 
 
 async def _forward_gemini_to_client(
@@ -632,7 +632,7 @@ async def _forward_gemini_to_client(
         raise
     except Exception as e:
         err_msg = str(e)
-        print(f"[{session_id}] ⚠️ Gemini→클라이언트 포워딩 오류: {err_msg}")
+        print(f"[{session_id}] [Warning] Gemini->클라이언트 포워딩 오류: {err_msg}")
         try:
             await websocket.send_json({
                 "type": "session_end",
@@ -655,7 +655,7 @@ async def _handle_tool_calls(
     loop = asyncio.get_running_loop()
 
     for fc in tool_call.function_calls:
-        print(f"[{session_id}] 🔧 Tool Call: {fc.name}({fc.args})")
+        print(f"[{session_id}] [Tool] Tool Call: {fc.name}({fc.args})")
 
         await websocket.send_json({
             "type": "tool_call_start",
@@ -717,7 +717,7 @@ async def _handle_tool_calls(
         })
 
     await gemini_session.send_tool_response(function_responses=function_responses)
-    print(f"[{session_id}] ✅ Tool Response 전송 완료 ({len(function_responses)}개)")
+    print(f"[{session_id}] [OK] Tool Response 전송 완료 ({len(function_responses)}개)")
 
 
 def _tool_start_message(tool_name: str) -> str:

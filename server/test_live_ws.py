@@ -36,7 +36,7 @@ async def create_session() -> str:
         resp.raise_for_status()
         data = resp.json()
         session_id = data["session_id"]
-        print(f"✅ 세션 생성됨: {session_id}")
+        print(f"[OK] 세션 생성됨: {session_id}")
         return session_id
 
 
@@ -46,7 +46,7 @@ async def run_ws_test(session_id: str):
 
     audio_chunks = []
 
-    print(f"🔗 WebSocket 연결 중: {uri}")
+    print(f"[Connect] WebSocket 연결 중: {uri}")
     async with websockets.connect(uri) as ws:
 
         # ── ready 메시지 대기 ──
@@ -55,7 +55,7 @@ async def run_ws_test(session_id: str):
         print(f"📨 서버: {msg}")
 
         if msg.get("type") != "ready":
-            print("❌ ready 메시지를 받지 못했습니다.")
+            print("[Error] ready 메시지를 받지 못했습니다.")
             return
 
         # ── 텍스트 입력 전송 ──
@@ -82,11 +82,11 @@ async def run_ws_test(session_id: str):
                     print(f"   📨 {msg_type}: {msg.get('message', '')}")
 
                     if msg_type == "turn_complete":
-                        print("\n✅ Gemini 응답 완료!")
+                        print("\n[OK] Gemini 응답 완료!")
                         turn_done = True
 
                     elif msg_type == "error":
-                        print(f"\n❌ 에러: {msg.get('message')}")
+                        print(f"\n[Error] 에러: {msg.get('message')}")
                         turn_done = True
 
                     elif msg_type in ("tool_call_start", "tool_call_end"):
@@ -111,7 +111,7 @@ async def run_ws_test(session_id: str):
         print(f"\n💾 오디오 저장됨: {OUTPUT_WAV} ({len(total_audio)} bytes, {len(total_audio)/48000:.1f}초)")
         print(f"   → 파일을 열어서 재생해 보세요!")
     else:
-        print("\n⚠️ 수신된 오디오 없음")
+        print("\n[Warning] 수신된 오디오 없음")
 
 
 async def main():

@@ -263,14 +263,14 @@ async def websocket_live_session(websocket: WebSocket, session_id: str):
         return
 
     await websocket.accept()
-    print(f"[{session_id}] 🔗 WebSocket 연결됨")
+    print(f"[{session_id}] [Connected] WebSocket 연결됨")
 
     try:
         await handle_live_session(session_id, websocket)
     except WebSocketDisconnect:
-        print(f"[{session_id}] 🔌 WebSocket 연결 해제")
+        print(f"[{session_id}] [Disconnected] WebSocket 연결 해제")
     except Exception as e:
-        print(f"[{session_id}] ❌ WebSocket 오류: {e}")
+        print(f"[{session_id}] [Error] WebSocket 오류: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
@@ -280,4 +280,4 @@ async def websocket_live_session(websocket: WebSocket, session_id: str):
             await websocket.close()
         except Exception:
             pass
-        print(f"[{session_id}] 🏁 Live 세션 종료")
+        print(f"[{session_id}] [End] Live 세션 종료")
