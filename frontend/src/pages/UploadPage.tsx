@@ -238,7 +238,7 @@ export const UploadPage: React.FC = () => {
     })
   }, [])
 
-  // 업로드된 자료 목록 불러오기
+  // Load list of uploaded materials
   const fetchSources = useCallback(async () => {
     setSourcesLoading(true)
     try {
@@ -279,7 +279,7 @@ export const UploadPage: React.FC = () => {
       addLog({ type: 'progress', text: `Uploading "${file.name}"... (${i + 1}/${files.length})`, ts: now() })
 
       try {
-        // 1. PDF 업로드 → key 받기
+        // 1. Upload PDF -> receive key
         const form = new FormData()
         form.append('file', file)
         const result = await api.postForm<{ docId: string; source: string; key: string; uploadedAt: string }>(
@@ -289,7 +289,7 @@ export const UploadPage: React.FC = () => {
         setProgress(10 + Math.floor(((i + 0.5) / files.length) * 60))
         setStatus('processing')
 
-        // 2. SSE로 처리 진행상황 수신
+        // 2. Continuous feedback via SSE
         await new Promise<void>((resolve, reject) => {
           addLog({ type: 'progress', text: 'Streaming processing logs via SSE...', ts: now() })
           const closeSSE = openSSE(
@@ -306,7 +306,7 @@ export const UploadPage: React.FC = () => {
                   closeSSE()
                   reject(new Error(msg.message))
                 } else if (msg.status === 'ping') {
-                  // heartbeat — 무시
+                  // heartbeat - ignore
                 } else {
                   addLog({ type: 'progress', text: msg.message ?? data, ts: now() })
                 }
@@ -316,7 +316,7 @@ export const UploadPage: React.FC = () => {
               }
             },
             (e) => {
-              // SSE가 종료되면 done으로 처리
+              // done if SSE ends
               const target = e.target as EventSource
               if (target.readyState === EventSource.CLOSED) {
                 closeSSE()
@@ -325,7 +325,7 @@ export const UploadPage: React.FC = () => {
             }
           )
 
-          // 타임아웃: 60초
+          // Timeout: 60s
           setTimeout(() => { closeSSE(); resolve() }, 60000)
         })
 
@@ -428,7 +428,7 @@ export const UploadPage: React.FC = () => {
               )}
             </div>
 
-            {/* 업로드된 자료 목록 */}
+            {/* Uploaded materials list */}
             <SourceSection>
               <CardHeader style={{ marginBottom: 10 }}>
                 <CardTitle>Uploaded Sources</CardTitle>
@@ -442,7 +442,7 @@ export const UploadPage: React.FC = () => {
                 sources.map(s => (
                   <SourceRow key={s.docId}>
                     <SourceName>{s.source}</SourceName>
-                    <SourceDate>{new Date(s.uploadedAt).toLocaleDateString('ko-KR')}</SourceDate>
+                    <SourceDate>{new Date(s.uploadedAt).toLocaleDateString('en-US')}</SourceDate>
                     <RemoveBtn onClick={() => handleDeleteSource(s.docId, s.source)}>×</RemoveBtn>
                   </SourceRow>
                 ))

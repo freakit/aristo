@@ -33,6 +33,7 @@ class LiveSessionStartRequest(BaseModel):
     exam_info: Dict[str, Any] = Field(default_factory=dict)
     rag_keys: Optional[List[str]] = None
     system_prompt_override: Optional[str] = None
+    study_goals: Optional[List[str]] = None
 
 
 # ====== 세션 생성 응답 ======

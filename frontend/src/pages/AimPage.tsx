@@ -44,6 +44,7 @@ export interface SessionInfo {
   title: string
   vectorDocIds: string[]
   vectorKeys: string[]
+  studyGoals: string[]
   status: string
   createdAt: string
 }
@@ -186,19 +187,41 @@ export const AimPage: React.FC = () => {
     try {
       // 선택된 소스들의 key 목록
       const selectedSources = sources.filter(s => selectedDocIds.includes(s.docId))
+      const vectorKeys = selectedSources.map(s => s.key)
       const title = `${mode === 'basic' ? 'Conceptual' : 'Applied'} Study — ${selectedSources.map(s => s.source).join(', ')}`
 
+      // 1. Python backend: auto-extract learning goals
+      const { generateLiveGoals } = await import('../lib/api')
+      let goals: string[] = []
+      try {
+        const result = await generateLiveGoals(vectorKeys)
+        goals = result.goals
+      } catch (e) {
+        console.warn('Failed to generate learning goals (VectorDB documents missing?):', e)
+      }
+      
+      if (goals.length === 0) {
+        setCreateError(
+          '⚠️ Failed to extract learning goals automatically. Please ensure PDFs are inserted into the Vector DB. (Go to Upload Materials -> Try again after upload complete)'
+        )
+        setCreating(false)
+        return
+      }
+      
+      // 2. 백엔드에서 세션 생성
       const result = await api.post<CreatedSession>('/sessions', {
         title,
         vectorDocIds: selectedDocIds,
+        vectorKeys,
+        studyGoals: goals,
       })
 
-      const vectorKeys = selectedSources.map(s => s.key)
       setCreatedSession({
         sessionId: result.sessionId,
         title: result.title,
         vectorDocIds: result.vectorDocIds,
         vectorKeys,
+        studyGoals: goals,
         status: result.status,
         createdAt: result.createdAt,
       })

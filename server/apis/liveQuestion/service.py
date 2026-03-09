@@ -19,8 +19,51 @@ from google import genai
 from google.genai import types
 
 from apis.rag.vectordb import VectorDBManager
-from apis.liveQuestion.prompts import LIVE_TUTOR_SYSTEM_PROMPT, LIVE_TUTOR_SYSTEM_PROMPT_KR
+from apis.liveQuestion.prompts import LIVE_TUTOR_SYSTEM_PROMPT
 from apis.liveQuestion.models import SessionStatus, TranscriptEntry
+
+async def _generate_initial_goals(keys: List[str], aio_client) -> List[str]:
+    loop = asyncio.get_running_loop()
+    
+    def fetch_docs():
+        db = get_vector_db()
+        keys_filter = db._build_keys_filter(keys)
+        if not keys_filter:
+            print("⚠️ keys_filter is empty. (Missing or invalid key list)")
+            return []
+        docs = db.collection.get(where=keys_filter, include=["documents"])
+        if not docs or not docs.get("documents"):
+            print("⚠️ No document content found. keys_filter:", keys_filter)
+            return []
+        return docs["documents"]
+        
+    doc_list = await loop.run_in_executor(None, fetch_docs)
+    if not doc_list:
+        print("⚠️ doc_list is empty. Aborting extraction.")
+        return []
+    
+    text = "\n\n".join(doc_list[:50])
+    print(f"📄 Model input text: {text[:200]}... (Total {len(text)} chars)")
+
+    prompt = (
+        "Based on the following learning materials, extract exactly 3 core concepts or learning goals that the student must master today. "
+        "Formulate them as specific sentences (e.g., 'Can explain the difference between X and Y', 'Understands the necessity of Z'). "
+        "Output exactly 3 lines, one goal per line. Do not use numbers, bullets, or any prefixes. "
+        "Just 3 clean sentences.\n\n[Materials]\n" + text
+    )
+    
+    try:
+        response = await aio_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+        print("💡 Gemini 응답:", response.text)
+        lines = response.text.strip().split("\n")
+        goals = [line.strip("- *0123456789. ") for line in lines if line.strip()]
+        return goals[:5]
+    except Exception as e:
+        print(f"Goal generation err: {e}")
+        return []
 
 # ====== 설정 ======
 
@@ -242,12 +285,12 @@ def execute_mark_completed(session_id: str, point: str, how_resolved: str) -> st
     completed.append({"point": point, "how_resolved": how_resolved, "timestamp": time.time()})
     save_md_files(session_id)
 
-    print(f"[{session_id}] ✅ Completed 이동: {point} ({how_resolved})")
+    print(f"[{session_id}] ✅ Moved to Completed: {point} ({how_resolved})")
     remaining = len(missing)
     return (
-        f"'{point}' → Completed 이동 완료. "
-        f"남은 Missing: {remaining}개"
-        + (" - 모든 항목 해결됨!" if remaining == 0 else "")
+        f"'{point}' → Successfully moved to Completed. "
+        f"Remaining Missing: {remaining}"
+        + (" - All goals resolved!" if remaining == 0 else "")
     )
 
 
@@ -258,6 +301,7 @@ def create_live_session(
     exam_info: Dict[str, Any],
     rag_keys: Optional[List[str]] = None,
     system_prompt_override: Optional[str] = None,
+    study_goals: Optional[List[str]] = None,
 ) -> str:
     """Live 세션 생성 후 session_id 반환"""
     session_id = str(uuid4())
@@ -266,10 +310,10 @@ def create_live_session(
         "student_info": student_info,
         "exam_info": exam_info,
         "rag_keys": rag_keys,
-        "system_prompt": system_prompt_override or LIVE_TUTOR_SYSTEM_PROMPT_KR,
+        "system_prompt": system_prompt_override or LIVE_TUTOR_SYSTEM_PROMPT,
         "status": SessionStatus.PENDING,
         "transcript": [],           # List[TranscriptEntry]
-        "missing_points": [],       # List[str]
+        "missing_points": study_goals or [],       # Set goals immediately
         "completed_points": [],     # List[Dict] {point, how_resolved, timestamp}
         "created_at": time.time(),
         "ended_at": None,
@@ -326,6 +370,9 @@ def build_live_config(session: Dict[str, Any]) -> dict:
     return {
         "response_modalities": ["AUDIO"],
         "system_instruction": system_prompt,
+        # 사용자 음성 자막 + AI 음성 자막 활성화
+        "input_audio_transcription":  {},
+        "output_audio_transcription": {},
         "tools": [{
             "function_declarations": [
                 SEARCH_DB_DECLARATION,
@@ -358,6 +405,16 @@ async def handle_live_session(session_id: str, websocket) -> None:
 
     client = genai.Client(api_key=api_key)
 
+    # Initial update to frontend for already-populated missing points
+    if session.get("missing_points"):
+        await websocket.send_json({
+            "type": "missing_update",
+            "data": {
+                "missing_points": session["missing_points"],
+                "completed_points": []
+            }
+        })
+
     # 상태: pending → active
     session["status"] = SessionStatus.ACTIVE
 
@@ -370,13 +427,13 @@ async def handle_live_session(session_id: str, websocket) -> None:
 
             await websocket.send_json({
                 "type": "ready",
-                "message": "Gemini Live 연결 완료. 오디오 스트리밍을 시작하세요.",
+                "message": "Gemini Live connected. You can start audio streaming.",
                 "data": {
                     "send_sample_rate":    SEND_SAMPLE_RATE,
                     "receive_sample_rate": RECEIVE_SAMPLE_RATE,
                 },
             })
-            print(f"[{session_id}] ✅ Gemini Live 연결 완료 (status=active)")
+            print(f"[{session_id}] ✅ Gemini Live connected (status=active)")
 
             # 첫 질문 시스템 주입
             first_question = session["exam_info"].get("first_question", "")
@@ -388,15 +445,28 @@ async def handle_live_session(session_id: str, websocket) -> None:
                 tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys, session))
 
     except asyncio.CancelledError:
-        print(f"[{session_id}] 세션 취소됨")
-    except Exception as e:
-        print(f"[{session_id}] ❌ Gemini Live 오류: {e}")
+        print(f"[{session_id}] Session cancelled")
         try:
-            await websocket.send_json({"type": "error", "message": f"Gemini Live 오류: {str(e)}"})
+            await websocket.send_json({"type": "session_end", "reason": "cancelled", "message": "Session was cancelled."})
+        except Exception:
+            pass
+    except Exception as e:
+        err_msg = str(e)
+        print(f"[{session_id}] ❌ Gemini Live error: {err_msg}")
+        try:
+            await websocket.send_json({"type": "error", "message": f"Gemini error: {err_msg}"})
+        except Exception:
+            pass
+        try:
+            await websocket.send_json({"type": "error", "message": f"Gemini Live 오류: {err_msg}"})
         except Exception:
             pass
     finally:
         _finish_session(session_id)
+        try:
+            await websocket.send_json({"type": "session_end", "reason": "finished", "message": "세션이 종료되었습니다."})
+        except Exception:
+            pass
         print(f"[{session_id}] 🔌 Gemini Live 연결 종료 (status=completed)")
 
 
@@ -446,6 +516,7 @@ async def _forward_client_to_gemini(
     session: Dict[str, Any],
 ) -> None:
     """클라이언트 → Gemini: 오디오 바이너리 & 텍스트 메시지 포워딩"""
+    import base64
     try:
         while True:
             message = await websocket.receive()
@@ -454,13 +525,13 @@ async def _forward_client_to_gemini(
                 print(f"[{session_id}] 클라이언트 연결 해제")
                 break
 
-            # 바이너리 = PCM 오디오
+            # 바이너리 지원 (레거시)
             if "bytes" in message and message["bytes"]:
                 await gemini_session.send_realtime_input(
                     audio={"data": message["bytes"], "mime_type": "audio/pcm"}
                 )
 
-            # 텍스트 = JSON 제어 메시지
+            # 텍스트 JSON payload
             elif "text" in message and message["text"]:
                 try:
                     msg = json.loads(message["text"])
@@ -469,6 +540,20 @@ async def _forward_client_to_gemini(
                     if msg_type == "end":
                         print(f"[{session_id}] 클라이언트 세션 종료 요청")
                         break
+
+                    elif msg_type == "audio":
+                        # Base64 string from React ScriptProcessor
+                        audio_b64 = msg.get("data", "")
+                        if audio_b64:
+                            audio_bytes = base64.b64decode(audio_b64)
+                            await gemini_session.send_realtime_input(
+                                audio={"data": audio_bytes, "mime_type": "audio/pcm"}
+                            )
+                            
+                    elif msg_type == "end_turn":
+                        # The user manually stopped the mic, so compel the AI to start speaking
+                        print(f"[{session_id}] 🛑 클라이언트 마이크 중지. 턴 종료 전송.")
+                        await gemini_session.send_client_content(turn_complete=True)
 
                     elif msg_type == "text":
                         text_content = msg.get("content", "")
@@ -508,18 +593,37 @@ async def _forward_gemini_to_client(
                         response.tool_call, rag_keys,
                     )
 
-                # 3) 서버 컨텐츠 (텍스트, 턴 완료)
+                # 3) 서버 컨텐츠 (트랜스크립트, 턴 완료)
                 elif response.server_content:
                     sc = response.server_content
 
+                    # 사용자 음성 자막 (input_audio_transcription)
+                    if hasattr(sc, "input_transcription") and sc.input_transcription:
+                        text = getattr(sc.input_transcription, "text", None)
+                        if text and text.strip():
+                            _append_transcript(session, "user", text)
+                            await websocket.send_json({
+                                "type": "input_transcript",
+                                "text": text,
+                            })
+
+                    # AI 음성 자막 (output_audio_transcription)
+                    if hasattr(sc, "output_transcription") and sc.output_transcription:
+                        text = getattr(sc.output_transcription, "text", None)
+                        if text and text.strip():
+                            _append_transcript(session, "ai", text)
+                            await websocket.send_json({
+                                "type": "output_transcript",
+                                "text": text,
+                            })
+
+                    # model_turn 텍스트는 Extended Thinking 내부 추론이라 표시 안 함
+                    # (WARNING: non-data parts ['thought','text'] 원인)
+                    # _append_transcript 에만 남기고 프론트에는 보내지 않음
                     if sc.model_turn:
                         for part in sc.model_turn.parts:
                             if hasattr(part, "text") and part.text:
-                                _append_transcript(session, "ai", part.text)
-                                await websocket.send_json({
-                                    "type": "transcript",
-                                    "message": part.text,
-                                })
+                                _append_transcript(session, "ai_thought", part.text)
 
                     if sc.turn_complete:
                         await websocket.send_json({"type": "turn_complete"})
@@ -527,7 +631,16 @@ async def _forward_gemini_to_client(
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        print(f"[{session_id}] ⚠️ Gemini→클라이언트 포워딩 오류: {e}")
+        err_msg = str(e)
+        print(f"[{session_id}] ⚠️ Gemini→클라이언트 포워딩 오류: {err_msg}")
+        try:
+            await websocket.send_json({
+                "type": "session_end",
+                "reason": "gemini_error",
+                "message": f"Gemini 연결 오류로 세션이 종료되었습니다: {err_msg}"
+            })
+        except Exception:
+            pass
 
 
 async def _handle_tool_calls(

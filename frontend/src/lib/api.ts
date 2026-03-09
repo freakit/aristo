@@ -164,3 +164,44 @@ export function endTutor(sessionId: string): Promise<TutorEndResponse> {
   })
 }
 
+// ──────────────────────────────────────────────────────────
+// Live Question API (Gemini Live)
+// ──────────────────────────────────────────────────────────
+
+export interface LiveSessionStartRequest {
+  student_info: Record<string, any>;
+  exam_info: {
+    name?: string;
+    content?: string;
+    first_question?: string;
+  };
+  rag_keys?: string[] | null;
+  system_prompt_override?: string | null;
+  study_goals?: string[] | null;
+}
+
+export interface LiveSessionStartResponse {
+  session_id: string;
+  ws_url: string;
+}
+
+export function createLiveSession(data: LiveSessionStartRequest): Promise<LiveSessionStartResponse> {
+  return api.post<LiveSessionStartResponse>('/live-question/session', data)
+}
+
+export async function openLiveQuestionWS(sessionId: string): Promise<WebSocket> {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  const host = window.location.host
+  // Route through Vite proxy to FastAPI
+  const url = `${protocol}://${host}/api/live-question/ws/${sessionId}`
+  return new WebSocket(url)
+}
+
+export function getLiveSessionResult(sessionId: string): Promise<any> {
+  return api.get(`/live-question/session/${sessionId}/result`)
+}
+
+export function generateLiveGoals(ragKeys: string[]): Promise<{ goals: string[] }> {
+  return api.post<{ goals: string[] }>('/live-question/generate-goals', { rag_keys: ragKeys })
+}
+
