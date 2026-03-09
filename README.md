@@ -1,7 +1,7 @@
 # ARISTO — AI-powered Real-time Interactive Speaking Tutor & Orchestrator
 
 **FreakIT**에서 개발한 AI 기반 구술 튜터링 플랫폼.  
-학생이 PDF를 업로드하면 AI가 먼저 개념을 설명하고, 소크라틱 질문으로 이해도를 검증합니다.
+학생이 PDF를 업로드하면 AI가 RAG로 자료를 검색하며 소크라틱 질문으로 이해를 실시간 평가합니다.
 
 ---
 
@@ -10,14 +10,14 @@
 | 기능 | 설명 |
 |---|---|
 | PDF 업로드 & 벡터화 | PDF → Python RAG 서버에서 파싱 → 청킹 → ChromaDB 임베딩 |
-| AI 튜터 모드 | AI가 개념 설명 → 소크라틱 질문 → Missing Point 분석 → 보충 설명 반복 |
-| 음성 답변 (STT) | 마이크 녹음 → Whisper STT → 텍스트 변환 후 튜터에 제출 |
-| 학습 요약 | 세션 종료 시 강점 / 복습 필요 영역 자동 생성 |
+| **Gemini Live 튜터 모드** ★ | Gemini Live API + RAG Function Calling 기반 실시간 음성 소크라틱 평가 |
+| Missing / Completed 추적 | AI가 학생 답변에서 누락 개념을 자동 추적 → 세션별 MD 파일로 저장 |
+| 음성 실시간 스트리밍 | PCM 16kHz 오디오 → WebSocket → Gemini Live AI 음성 응답 |
 | Firebase Auth | Google 계정으로 로그인, ID Token으로 모든 API 인증 |
 
 ---
 
-## �️ 아키텍처
+## 🏗️ 아키텍처
 
 ```
 [Browser: React + Vite]
@@ -26,11 +26,8 @@
   ├─ Firebase Auth (JWT 검증)
   ├─ Firestore (세션, 메시지, 벡터 메타데이터)
   └─ HTTP proxy ──→ [server: Python FastAPI - :8000]
-                        ├─ /api/question  (소크라틱 평가 모드)
-                        ├─ /api/tutor     (AI 튜터 모드) ★
-                        ├─ /api/rag       (PDF 파이프라인)
-                        ├─ /api/stt       (Whisper STT)
-                        └─ /api/voice     (음성 분석)
+                        ├─ /api/live-question  (Gemini Live + RAG 소크라틱 튜터) ★
+                        └─ /api/rag            (PDF 파이프라인)
 ```
 
 ---
@@ -44,7 +41,7 @@
 | Styling | styled-components |
 | Routing | react-router-dom |
 | Auth | Firebase Client SDK (`onAuthStateChanged`) |
-| API | 자체 `apiFetch` 래퍼 (Bearer 토큰 자동 주입) |
+| API | 자체 `apiFetch` 래퍼 (Bearer 토큰 자동 주입) + WebSocket |
 
 ### Backend (`backend/`)  ─ Node.js Express (:3001)
 | | |
@@ -52,18 +49,16 @@
 | Auth | Firebase Admin SDK (`verifyFirebaseToken` 미들웨어) |
 | DB | Cloud Firestore (`sessions`, `vectordb`, `users` 컬렉션) |
 | RAG 연동 | axios → Python server `/api/rag/*` |
-| Tutor 연동 | axios → Python server `/api/tutor/*` |
-| STT 연동 | axios → Python server `/api/stt/transcribe` |
+| Live 연동 | WebSocket proxy → Python server `/api/live-question/ws/*` |
 
 ### Server (`server/`) — Python FastAPI (:8000)
 | | |
 |---|---|
 | Framework | FastAPI + Uvicorn |
-| AI | Google Gemini API |
+| AI | Google Gemini Live API (`gemini-2.5-flash-native-audio-preview`) |
 | Vector DB | ChromaDB (로컬) |
 | RAG | PDF 파싱 → 청킹 → 임베딩 → 하이브리드 검색 |
-| Tutor | 기존 소크라틱 엔진(Missing Point + Followup) 재활용 |
-| STT | Faster-Whisper |
+| Live Tutor | Gemini Live WebSocket + RAG Function Calling (`search_db` / `add_missing_point` / `mark_completed`) |
 
 ---
 
@@ -134,28 +129,30 @@ npm run dev
 aristo/
 ├── backend/                    # Node.js Express 서버 (:3001)
 │   ├── config/                 # Firebase, Logger 설정
-│   ├── controllers/            # RAG, Tutor, STT, Sessions 컨트롤러
+│   ├── controllers/            # RAG, Live Question, STT, Sessions 컨트롤러
 │   ├── middleware/             # verifyFirebaseToken
 │   ├── repositories/           # Firestore CRUD
-│   ├── routes/                 # auth / rag / sessions / tutor / stt
-│   ├── services/               # rag, tutor, sessions, python-api 서비스
+│   ├── routes/                 # auth / rag / sessions / live-question / stt
+│   ├── services/               # rag, sessions, python-api 서비스
 │   ├── api_spec.md             # Node.js API 명세
 │   └── server.js
 ├── server/                     # Python FastAPI 서버 (:8000)
 │   ├── apis/
-│   │   ├── question/           # 소크라틱 평가 API
-│   │   ├── tutor/              # AI 튜터 API ★ (신규)
-│   │   ├── rag/                # RAG 파이프라인
-│   │   ├── stt/                # Whisper STT
-│   │   └── voice/              # 음성 분석
+│   │   ├── liveQuestion/       # Gemini Live + RAG 소크라틱 튜터 ★
+│   │   │   ├── router.py       # WebSocket + REST CRUD
+│   │   │   ├── service.py      # Gemini Live 세션 관리 / Tool 실행
+│   │   │   ├── prompts.py      # 시스템 프롬프트 (KR/EN)
+│   │   │   └── models.py       # 요청/응답 모델
+│   │   └── rag/                # RAG 파이프라인
 │   ├── common/                 # ai_client, config
+│   ├── sessions/               # 세션별 Missing.md / Completed.md 저장
 │   ├── API_SPEC.md             # Python API 명세
 │   └── main.py
 └── frontend-real/              # React + Vite 프론트엔드 (:5173)
     ├── src/
     │   ├── components/         # AppHeader, Button, Card 등 공통 컴포넌트
     │   ├── hooks/              # AuthContext (Firebase 연동)
-    │   ├── lib/                # api.ts (fetch 래퍼 + 튜터 API 함수)
+    │   ├── lib/                # api.ts (fetch/WebSocket 래퍼)
     │   ├── pages/              # Landing / Upload / Aim / Study
     │   └── styles/             # theme
     └── vite.config.ts          # /api, /ws 프록시 → :3001
@@ -165,12 +162,18 @@ aristo/
 
 ## 🔗 API 흐름 요약
 
-### 튜터 세션 (핵심 기능)
+### Live 튜터 세션 (핵심 기능)
 
 ```
-1. POST /api/tutor/start   → 주제 설명 + 첫 이해 확인 질문
-2. POST /api/tutor/reply   → 답변 분석 → 피드백 + 보충 + 다음 질문 (반복)
-3. POST /api/tutor/end     → 세션 종료 + 학습 요약
+1. POST /api/live-question/session   → 세션 생성 (session_id + ws_url 반환)
+2. WS   /api/live-question/ws/{id}  → WebSocket 연결 (Gemini Live 브리지)
+   ├─ Client→Server: PCM 오디오 (binary) 또는 {"type":"text","content":"..."}
+   ├─ Server→Client: binary (Gemini AI 음성) / JSON 이벤트
+   │     ready | transcript | turn_complete
+   │     tool_call_start | tool_call_end
+   │     missing_update | completed_update | error
+   └─ Client→Server: {"type":"end"} → 세션 종료
+3. GET  /api/live-question/session/{id}/result  → 최종 결과 (transcript, missing, completed)
 ```
 
 ### RAG 파이프라인

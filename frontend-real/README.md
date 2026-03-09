@@ -1,7 +1,7 @@
 # Aristo Frontend
 
 > **Stack**: React 18 + TypeScript + Vite + styled-components  
-> **Backend**: Node.js Express `:3001` (Vite proxy로 `/api` → `:3001`)
+> **Backend**: Node.js Express `:3001` (Vite proxy로 `/api` → `:3001`, `/ws` → `:3001`)
 
 ---
 
@@ -13,13 +13,13 @@ src/
 ├── hooks/
 │   └── AuthContext.tsx  # Firebase onAuthStateChanged + 더미 로그인 상태 관리
 ├── lib/
-│   ├── api.ts           # apiFetch 래퍼 (Bearer 토큰 자동 주입) + 튜터 API 함수
+│   ├── api.ts           # apiFetch 래퍼 (Bearer 토큰 자동 주입) + Live Question API 함수
 │   └── firebase.ts      # Firebase 앱 초기화
 ├── pages/
 │   ├── LandingPage.tsx  # 랜딩 + 더미 로그인
 │   ├── UploadPage.tsx   # PDF 업로드 + SSE 진행 로그
 │   ├── AimPage.tsx      # 세션 생성 + 학습 목표 설정
-│   └── StudyPage.tsx    # AI 튜터 세션 (설명→질문→피드백→요약)
+│   └── StudyPage.tsx    # Gemini Live 소크라틱 튜터 세션 ★
 ├── styles/
 │   └── theme.ts         # 디자인 토큰
 └── vite-env.d.ts        # Vite 환경변수 타입
@@ -43,23 +43,27 @@ src/
 - 학습 제목 입력 → `POST /api/sessions` 세션 생성
 - StudyPage로 state 전달
 
-### 4. Study Page (AI 튜터) ★
-- 세션 목록 → 세션 선택 → Start Tutoring
+### 4. Study Page (Gemini Live 튜터) ★
 
-**튜터 흐름:**
+**흐름:**
 ```
-1. [Start] → POST /api/tutor/start
-             ↓ 🎓 AI 개념 설명 버블
-             ↓ ❓ 첫 이해 확인 질문
+1. [Start] → POST /api/live-question/session
+             ↓ session_id + ws_url 반환
+             WS /api/live-question/ws/{session_id}
+             ↓ binary: Gemini 음성 수신 (24kHz PCM)
+             ↓ binary: 마이크 오디오 전송 (16kHz PCM)
+             ↓ {"type":"ready"} ← Gemini 연결 완료
 
-2. [답변]  → 마이크(STT: POST /api/stt/transcribe) 또는 텍스트 입력
-             ↓ POST /api/tutor/reply
-             ↓ 💬 피드백 버블
-             ↓ 📖 보충 설명 버블
-             ↓ ❓ 다음 질문 (또는 완료)
+2. [대화]  → 마이크 오디오 → binary 전송 (PCM 16kHz)
+             또는 {"type":"text","content":"..."} 텍스트 입력
+             ↓ Gemini AI 음성 응답 (binary)
+             ↓ {"type":"transcript","message":"..."} AI 발화 자막
+             ↓ {"type":"missing_update"/"completed_update"} 학습 추적
 
-3. [완료]  → POST /api/tutor/end
-             ↓ ✅ 학습 요약 카드 (강점 / 복습 필요 영역)
+3. [종료]  → {"type":"end"} 전송
+             WS 연결 종료
+             ↓ GET /api/live-question/session/{id}/result
+             ↓ 최종 결과 (transcript / missing_points / completed_points)
 ```
 
 ---
@@ -82,9 +86,8 @@ src/
 | `api.patch(path, body)` | PATCH 요청 |
 | `api.delete(path)` | DELETE 요청 |
 | `openSSE(path, onMsg)` | SSE EventSource 연결 |
-| `startTutor(topic, opts)` | 튜터 세션 시작 |
-| `replyTutor(sessionId, answer)` | 답변 제출 |
-| `endTutor(sessionId)` | 세션 종료 + 요약 |
+| `createLiveSession(params)` | Live 세션 생성 (session_id + ws_url) |
+| `getLiveResult(sessionId)` | 세션 최종 결과 조회 |
 
 ---
 
