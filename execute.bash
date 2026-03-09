@@ -9,7 +9,7 @@
 (cd ./backend && npm run dev 2>&1 | sed 's/^/[Bak] /') &
 
 # Start frontend (Node.js)
-(cd ./frontend-real && npm run dev 2>&1 | sed 's/^/[Frt] /') &
+(cd ./frontend && npm run dev 2>&1 | sed 's/^/[Frt] /') &
 
 # Wait for all background processes
 wait
