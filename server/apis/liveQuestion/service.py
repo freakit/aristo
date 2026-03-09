@@ -419,52 +419,79 @@ async def handle_live_session(session_id: str, websocket) -> None:
     session["status"] = SessionStatus.ACTIVE
 
     try:
-        async with client.aio.live.connect(
-            model=GEMINI_LIVE_MODEL,
-            config=config,
-        ) as gemini_session:
-            session["gemini_session"] = gemini_session
+        is_first_connection = True
+        while session.get("active", True):
+            try:
+                async with client.aio.live.connect(
+                    model=GEMINI_LIVE_MODEL,
+                    config=config,
+                ) as gemini_session:
+                    session["gemini_session"] = gemini_session
 
-            await websocket.send_json({
-                "type": "ready",
-                "message": "Gemini Live connected. You can start audio streaming.",
-                "data": {
-                    "send_sample_rate":    SEND_SAMPLE_RATE,
-                    "receive_sample_rate": RECEIVE_SAMPLE_RATE,
-                },
-            })
-            print(f"[{session_id}] [OK] Gemini Live connected (status=active)")
+                    if is_first_connection:
+                        await websocket.send_json({
+                            "type": "ready",
+                            "message": "Gemini Live connected. You can start audio streaming.",
+                            "data": {
+                                "send_sample_rate":    SEND_SAMPLE_RATE,
+                                "receive_sample_rate": RECEIVE_SAMPLE_RATE,
+                            },
+                        })
+                        print(f"[{session_id}] [OK] Gemini Live connected (status=active)")
 
-            # 첫 질문 시스템 주입
-            first_question = session["exam_info"].get("first_question", "")
-            if first_question:
-                await _inject_first_question(session_id, gemini_session, first_question)
-            else:
-                goals = session.get("missing_points", [])
-                if goals:
-                    await _inject_dynamic_first_question(session_id, gemini_session, goals)
-                else:
-                    await _inject_first_question(session_id, gemini_session, "안녕하세요! 오늘 어떤 대화를 나눠볼까요?")
+                        # 첫 질문 시스템 주입
+                        first_question = session["exam_info"].get("first_question", "")
+                        if first_question:
+                            await _inject_first_question(session_id, gemini_session, first_question)
+                        else:
+                            goals = session.get("missing_points", [])
+                            if goals:
+                                await _inject_dynamic_first_question(session_id, gemini_session, goals)
+                            else:
+                                await _inject_first_question(session_id, gemini_session, "안녕하세요! 오늘 어떤 대화를 나눠볼까요?")
+                        is_first_connection = False
+                    else:
+                        print(f"[{session_id}] [Reconnect] Gemini Live 빈번한 끊김으로 서버 핫 재연결을 시도했습니다.")
+                        
+                        # 1. 이전 트랜스크립트 불러오기 (최신 10개만 유지해서 너무 길어지지 않게)
+                        recent_history = session.get("transcript", [])[-10:]
+                        history_text = "이전 대화 내역:\n"
+                        for entry in recent_history:
+                            role_name = "학습자" if "user" in entry.role else "AI 튜터"
+                            history_text += f"{role_name}: {entry.text}\n"
+                        
+                        # 2. 재연결시 문맥 복원용 프롬프트 전송
+                        recovery_prompt = (
+                            f"시스템 안내: 네트워크 문제로 연결이 잠시 끊어졌다 복구되었습니다. "
+                            f"학생은 중간에 끊긴 사실을 모릅니다. 절대 이에 대해 사과하거나 언급하지 마세요.\n\n"
+                            f"{history_text}\n"
+                            f"위 대화 내역을 바탕으로 맥락을 유지하면서, 학습자가 마지막으로 했던 답변에 이어서 자연스럽게 반응해주세요."
+                        )
+                        await gemini_session.send_client_content(
+                            turns={"parts": [{"text": recovery_prompt}]},
+                            turn_complete=True,
+                        )
+                        print(f"[{session_id}] [Reconnect] 이전 대화 내역을 Gemini에게 주입 완료했습니다.")
 
-            async with asyncio.TaskGroup() as tg:
-                tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
-                tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys, session))
+                    async with asyncio.TaskGroup() as tg:
+                        tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
+                        tg.create_task(_forward_gemini_to_client(session_id, websocket, gemini_session, rag_keys, session))
+
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                err_msg = str(e)
+                print(f"[{session_id}] [Error] Gemini Live error or disconnected: {err_msg}")
+                if not session.get("active", True):
+                    break
+                # 비정상 종료 시 재연결 시도 (1초 대기 후)
+                print(f"[{session_id}] [Reconnect] 1초 뒤 재연결 시도...")
+                await asyncio.sleep(1)
 
     except asyncio.CancelledError:
         print(f"[{session_id}] Session cancelled")
         try:
             await websocket.send_json({"type": "session_end", "reason": "cancelled", "message": "Session was cancelled."})
-        except Exception:
-            pass
-    except Exception as e:
-        err_msg = str(e)
-        print(f"[{session_id}] [Error] Gemini Live error: {err_msg}")
-        try:
-            await websocket.send_json({"type": "error", "message": f"Gemini error: {err_msg}"})
-        except Exception:
-            pass
-        try:
-            await websocket.send_json({"type": "error", "message": f"Gemini Live 오류: {err_msg}"})
         except Exception:
             pass
     finally:
@@ -473,7 +500,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
             await websocket.send_json({"type": "session_end", "reason": "finished", "message": "세션이 종료되었습니다."})
         except Exception:
             pass
-        print(f"[{session_id}] [Closed] Gemini Live 연결 종료 (status=completed)")
+        print(f"[{session_id}] [Closed] Gemini Live 연결 및 루프 완전히 종료됨")
 
 
 def _finish_session(session_id: str):
@@ -560,7 +587,7 @@ async def _forward_client_to_gemini(
             # 바이너리 지원 (레거시)
             if "bytes" in message and message["bytes"]:
                 await gemini_session.send_realtime_input(
-                    audio={"data": message["bytes"], "mime_type": "audio/pcm"}
+                    audio={"data": message["bytes"], "mime_type": "audio/pcm;rate=16000"}
                 )
 
             # 텍스트 JSON payload
@@ -571,7 +598,8 @@ async def _forward_client_to_gemini(
 
                     if msg_type == "end":
                         print(f"[{session_id}] 클라이언트 세션 종료 요청")
-                        break
+                        session["active"] = False
+                        raise asyncio.CancelledError("Client ended session")
 
                     elif msg_type == "audio":
                         # Base64 string from React ScriptProcessor
@@ -579,7 +607,7 @@ async def _forward_client_to_gemini(
                         if audio_b64:
                             audio_bytes = base64.b64decode(audio_b64)
                             await gemini_session.send_realtime_input(
-                                audio={"data": audio_bytes, "mime_type": "audio/pcm"}
+                                audio={"data": audio_bytes, "mime_type": "audio/pcm;rate=16000"}
                             )
                             
                     elif msg_type == "end_turn":
@@ -597,8 +625,12 @@ async def _forward_client_to_gemini(
                 except json.JSONDecodeError:
                     pass
 
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
-        print(f"[{session_id}] [Warning] 클라이언트->Gemini 포워딩 오류: {e}")
+        print(f"[{session_id}] [Warning] 클라이언트->Gemini 포워딩 오류(클라이언트 종료 등): {e}")
+        session["active"] = False
+        raise asyncio.CancelledError("Client websocket issue")
 
 
 async def _forward_gemini_to_client(
@@ -669,14 +701,9 @@ async def _forward_gemini_to_client(
     except Exception as e:
         err_msg = str(e)
         print(f"[{session_id}] [Warning] Gemini->클라이언트 포워딩 오류: {err_msg}")
-        try:
-            await websocket.send_json({
-                "type": "session_end",
-                "reason": "gemini_error",
-                "message": f"Gemini 연결 오류로 세션이 종료되었습니다: {err_msg}"
-            })
-        except Exception:
-            pass
+        # 오류를 던져 TaskGroup이 이를 취소하고 재연결 루프로 넘어가도록 함.
+        # 비정상 종료 시 클라이언트 연결 종료 패킷을 보내지 않음
+        raise e
 
 
 async def _handle_tool_calls(
