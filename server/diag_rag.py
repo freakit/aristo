@@ -68,8 +68,8 @@ async def test_goal_gen(key: str):
         f"[자료]\n{text}"
     )
     
-    print(f"📡 Gemini API 호출 중 (gemini-2.5-flash)...")
-    response = await client_ai.aio.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+    print(f"📡 Gemini API 호출 중 (gemini-3-flash-preview)...")
+    response = await client_ai.aio.models.generate_content(model="gemini-3-flash-preview", contents=prompt)
     
     lines = response.text.strip().split("\n")
     goals = [line.strip("- *0123456789. ") for line in lines if line.strip()]

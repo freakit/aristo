@@ -24,7 +24,7 @@ class GeminiReranker:
     Cross-encoder 스타일로 쿼리와 문서 쌍의 관련성을 평가
     """
     
-    def __init__(self, model_name: str = "gemini-2.5-flash-lite"):
+    def __init__(self, model_name: str = "gemini-3.1-flash-lite-preview"):
         """
         Args:
             model_name: 사용할 Gemini 모델

@@ -82,7 +82,7 @@ DECORATIVE: Publisher logos, company logos, watermarks, page decorations, icons 
 Reply with ONLY one word: CONTENT or DECORATIVE"""
 
             response = self.gemini_client.models.generate_content(
-                model="gemini-2.5-flash-lite",  # 빠르고 저렴한 모델 사용
+                model="gemini-3.1-flash-lite-preview",  # 빠르고 저렴한 모델 사용
                 contents=[
                     types.Content(
                         role="user",
@@ -261,7 +261,7 @@ Text to refine:
         max_retries = 3
         
         try:
-            model_name = "gemini-2.5-flash-lite"
+            model_name = "gemini-3.1-flash-lite-preview"
             
             for attempt in range(max_retries):
                 try:

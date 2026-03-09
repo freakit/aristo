@@ -110,15 +110,15 @@ async def health():
 async def startup_event():
     """서버 시작 시 초기화"""
     print("=" * 50)
-    print("🚀 Aristo Backend v4.0.0")
+    print("[Start] Aristo Backend v4.0.0")
     print("=" * 50)
 
     # AI 클라이언트 초기화
     init_ai_client()
 
-    print(f"🎙️ Live Question API: /api/live-question")
-    print(f"📚 RAG API:           /api/rag")
-    print(f"📖 Swagger Docs: http://{HOST}:{PORT}/docs")
+    print(f"  - Live Question API: /api/live-question")
+    print(f"  - RAG API:           /api/rag")
+    print(f"  - Swagger Docs:      http://{HOST}:{PORT}/docs")
     print("=" * 50)
 
 
