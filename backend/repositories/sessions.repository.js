@@ -3,13 +3,15 @@ const { db } = require("../config/firebase");
 
 class SessionsRepository {
   // 세션 생성
-  async createSession({ uid, title, vectorDocIds }) {
+  async createSession({ uid, title, vectorDocIds, vectorKeys, studyGoals }) {
     const docRef = db.collection("sessions").doc();
     const now = new Date().toISOString();
     const data = {
       uid,
       title: title || "새 학습 세션",
       vectorDocIds: vectorDocIds || [],
+      vectorKeys: vectorKeys || [],
+      studyGoals: studyGoals || [],
       status: "active",
       createdAt: now,
       updatedAt: now,

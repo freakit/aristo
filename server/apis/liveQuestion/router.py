@@ -52,11 +52,33 @@ async def api_create_session(req: LiveSessionStartRequest):
         exam_info=req.exam_info,
         rag_keys=req.rag_keys,
         system_prompt_override=req.system_prompt_override,
+        study_goals=req.study_goals,
     )
     return LiveSessionStartResponse(
         session_id=session_id,
         ws_url=f"/api/live-question/ws/{session_id}",
     )
+
+
+from pydantic import BaseModel
+
+class GoalGenRequest(BaseModel):
+    rag_keys: List[str]
+
+@router.post("/generate-goals", summary="학습 목표 자동 생성")
+async def api_generate_goals(req: GoalGenRequest):
+    """지정된 문서(키)들로부터 학습 목표 3가지를 자동 추출합니다."""
+    if not req.rag_keys:
+        return {"goals": []}
+    
+    import os
+    from google import genai
+    from apis.liveQuestion.service import _generate_initial_goals
+    
+    api_key = os.getenv("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
+    goals = await _generate_initial_goals(req.rag_keys, client.aio)
+    return {"goals": goals}
 
 
 @router.get("/session/{session_id}", response_model=LiveSessionInfoResponse, summary="세션 정보 조회")

@@ -7,6 +7,7 @@ const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const logger = require("./config/logger");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 // const pinoHttp = require("pino-http")({ logger });
 
 const mainApiRouter = require("./routes");
@@ -37,6 +38,19 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Proxy /api/live-question to Python Server
+const PYTHON_API_URL = process.env.AI_SERVER_URL || "http://localhost:8000";
+app.use(
+  "/api/live-question",
+  createProxyMiddleware({
+    target: PYTHON_API_URL,
+    changeOrigin: true,
+    ws: true,
+    pathRewrite: (path, req) => req.originalUrl, // Ensure original path is kept
+  })
+);
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // app.use(pinoHttp);

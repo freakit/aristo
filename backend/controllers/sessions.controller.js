@@ -5,11 +5,13 @@ class SessionsController {
   // POST /api/sessions
   async createSession(req, res, next) {
     try {
-      const { title, vectorDocIds } = req.body;
+      const { title, vectorDocIds, vectorKeys, studyGoals } = req.body;
       const session = await sessionsService.createSession({
         uid: req.uid,
         title,
         vectorDocIds,
+        vectorKeys,
+        studyGoals,
       });
       res.status(201).json(session);
     } catch (error) {

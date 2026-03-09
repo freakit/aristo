@@ -2,8 +2,8 @@
 const sessionsRepository = require("../repositories/sessions.repository");
 
 class SessionsService {
-  async createSession({ uid, title, vectorDocIds }) {
-    return sessionsRepository.createSession({ uid, title, vectorDocIds });
+  async createSession({ uid, title, vectorDocIds, vectorKeys, studyGoals }) {
+    return sessionsRepository.createSession({ uid, title, vectorDocIds, vectorKeys, studyGoals });
   }
 
   async getSessions(uid, { limit, before } = {}) {
