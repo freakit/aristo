@@ -310,7 +310,7 @@ def create_live_session(
         "student_info": student_info,
         "exam_info": exam_info,
         "rag_keys": rag_keys,
-        "system_prompt": system_prompt_override or LIVE_TUTOR_SYSTEM_PROMPT,
+        "system_prompt": (f"{LIVE_TUTOR_SYSTEM_PROMPT}\n\n{system_prompt_override}") if system_prompt_override else LIVE_TUTOR_SYSTEM_PROMPT,
         "status": SessionStatus.PENDING,
         "transcript": [],           # List[TranscriptEntry]
         "missing_points": study_goals or [],       # Set goals immediately
@@ -439,6 +439,12 @@ async def handle_live_session(session_id: str, websocket) -> None:
             first_question = session["exam_info"].get("first_question", "")
             if first_question:
                 await _inject_first_question(session_id, gemini_session, first_question)
+            else:
+                goals = session.get("missing_points", [])
+                if goals:
+                    await _inject_dynamic_first_question(session_id, gemini_session, goals)
+                else:
+                    await _inject_first_question(session_id, gemini_session, "안녕하세요! 오늘 어떤 대화를 나눠볼까요?")
 
             async with asyncio.TaskGroup() as tg:
                 tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
@@ -505,6 +511,32 @@ async def _inject_first_question(
         print(f"[{session_id}] [Msg] 첫 질문 주입됨: {first_question[:50]}...")
     except Exception as e:
         print(f"[{session_id}] [Warning] 첫 질문 주입 실패: {e}")
+
+
+async def _inject_dynamic_first_question(
+    session_id: str,
+    gemini_session,
+    goals: List[str],
+) -> None:
+    """
+    세션 시작 시 시스템이 학습 목표를 기반으로 
+    첫 질문을 동적으로 생성하도록 Gemini에 주입.
+    """
+    goals_text = "\n".join([f"- {g}" for g in goals])
+    instruction = (
+        f"학생에게 환영 인사를 건네고, 다음 학습 목표들 중 하나에 대해 생각해보게 하는 흥미롭고 자연스러운 첫 질문을 던져주세요. "
+        f"'이 문서를 기준으로 학습을 시작하겠습니다' 혹은 '무엇부터 시작할까요?'와 같은 딱딱하거나 일반적인 말은 절대 하지 말고, "
+        f"목표와 관련된 구체적인 개념을 바로 화두로 던지세요.\n\n"
+        f"[학습 목표]\n{goals_text}"
+    )
+    try:
+        await gemini_session.send_client_content(
+            turns={"parts": [{"text": instruction}]},
+            turn_complete=True,
+        )
+        print(f"[{session_id}] [Msg] 동적 첫 질문 주입됨")
+    except Exception as e:
+        print(f"[{session_id}] [Warning] 동적 첫 질문 주입 실패: {e}")
 
 
 # ====== 내부 태스크 ======
@@ -627,6 +659,10 @@ async def _forward_gemini_to_client(
 
                     if sc.turn_complete:
                         await websocket.send_json({"type": "turn_complete"})
+                    
+                    if getattr(sc, "interrupted", False):
+                        print(f"[{session_id}] [Interrupt] Gemini Live가 사용자 발화로 중단됨")
+                        await websocket.send_json({"type": "interrupted"})
 
     except asyncio.CancelledError:
         raise

@@ -373,6 +373,7 @@ export const StudyPage: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const nextTimeRef = useRef<number>(0)
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([])
 
   // Input
   const [textAnswer, setTextAnswer] = useState('')
@@ -455,12 +456,9 @@ export const StudyPage: React.FC = () => {
         `Call the 'mark_completed' tool whenever the student demonstrates understanding or explains a specific concept.`
       )
 
-      // The actual first sentence the AI will speak
-      const first_q = `Hi there! Today we're going to explore "${topic}" together. Are you ready? What should we start with?`
-      
       const res = await createLiveSession({
         student_info: { id: "student1" },
-        exam_info: { name: topic, first_question: first_q },
+        exam_info: { name: topic, first_question: "" },
         rag_keys: selectedSession.vectorKeys || undefined,
         system_prompt_override: system_override,
         study_goals: goals,
@@ -539,6 +537,24 @@ export const StudyPage: React.FC = () => {
               // 사용자 음성 누적
               liveUserBufferRef.current += (liveUserBufferRef.current ? ' ' : '') + msg.text
               setLiveUserDisplay(liveUserBufferRef.current)
+
+              // 학생 발화 시작 시 재생 중인 오디오 즉시 자르기
+              activeSourcesRef.current.forEach(src => {
+                try { src.stop() } catch (e) {}
+              })
+              activeSourcesRef.current = []
+              if (audioContextRef.current) {
+                nextTimeRef.current = audioContextRef.current.currentTime
+              }
+            } else if (msg.type === 'interrupted') {
+              // AI 모델생성 중단됨
+              activeSourcesRef.current.forEach(src => {
+                try { src.stop() } catch (e) {}
+              })
+              activeSourcesRef.current = []
+              if (audioContextRef.current) {
+                nextTimeRef.current = audioContextRef.current.currentTime
+              }
             } else if (msg.type === 'output_transcript') {
               // AI 음성 누적 — AI가 말하기 시작하면 사용자 발화를 먼저 커밋
               if (liveUserBufferRef.current.trim()) {
@@ -575,6 +591,12 @@ export const StudyPage: React.FC = () => {
           const source = audioContextRef.current.createBufferSource()
           source.buffer = buffer
           source.connect(audioContextRef.current.destination)
+          
+          source.onended = () => {
+            activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source)
+          }
+          activeSourcesRef.current.push(source)
+
           if (nextTimeRef.current < audioContextRef.current.currentTime) {
             nextTimeRef.current = audioContextRef.current.currentTime
           }
@@ -650,6 +672,10 @@ export const StudyPage: React.FC = () => {
       wsRef.current.send(JSON.stringify({ type: 'end' }))
       wsRef.current.close()
     }
+    activeSourcesRef.current.forEach(src => {
+      try { src.stop() } catch (e) {}
+    })
+    activeSourcesRef.current = []
     if (audioContextRef.current) {
       audioContextRef.current.close()
     }
