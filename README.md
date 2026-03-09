@@ -34,7 +34,7 @@
 
 ## 🛠 기술 스택
 
-### Frontend (`frontend-real/`)
+### Frontend (`frontend/`)
 | | |
 |---|---|
 | Framework | React 18 + TypeScript + Vite |
@@ -94,28 +94,23 @@ cd backend
 npm install
 
 # .env 설정
-# PORT=3001
-# FIREBASE_STORAGE_BUCKET=...
-# AI_SERVER_URL=http://localhost:8000
-# (serviceAccountKey.json 필요)
+cp .env.example .env
+# FIREBASE_STORAGE_BUCKET, AI_SERVER_URL 입력
+# serviceAccountKey.json 파일을 backend/ 루트에 배치
 
 npm run dev
 # → http://localhost:3001
 ```
 
-### 3. 프론트엔드 (`frontend-real/`)
+### 3. 프론트엔드 (`frontend/`)
 
 ```bash
-cd frontend-real
+cd frontend
 npm install
 
 # .env 설정
-# VITE_FIREBASE_API_KEY=...
-# VITE_FIREBASE_AUTH_DOMAIN=...
-# VITE_FIREBASE_PROJECT_ID=...
-# VITE_FIREBASE_STORAGE_BUCKET=...
-# VITE_FIREBASE_MESSAGING_SENDER_ID=...
-# VITE_FIREBASE_APP_ID=...
+cp .env.example .env
+# VITE_FIREBASE_* 및 VITE_API_URL 입력
 
 npm run dev
 # → http://localhost:5173
@@ -127,12 +122,12 @@ npm run dev
 
 ```
 aristo/
-├── backend/                    # Node.js Express 서버 (:3001)
-│   ├── config/                 # Firebase, Logger 설정
-│   ├── controllers/            # RAG, Live Question, STT, Sessions 컨트롤러
-│   ├── middleware/             # verifyFirebaseToken
-│   ├── repositories/           # Firestore CRUD
-│   ├── routes/                 # auth / rag / sessions / live-question / stt
+├── backend/                 # Node.js Express 서버 (:3001)
+│   ├── config/              # Firebase, Logger 설정
+│   ├── controllers/         # RAG, Live Question, Sessions 컨트롤러
+│   ├── middleware/          # verifyFirebaseToken
+│   ├── repositories/        # Firestore CRUD
+│   ├── routes/              # auth / rag / sessions / live-question
 │   ├── services/               # rag, sessions, python-api 서비스
 │   ├── api_spec.md             # Node.js API 명세
 │   └── server.js
@@ -148,7 +143,7 @@ aristo/
 │   ├── sessions/               # 세션별 Missing.md / Completed.md 저장
 │   ├── API_SPEC.md             # Python API 명세
 │   └── main.py
-└── frontend-real/              # React + Vite 프론트엔드 (:5173)
+└── frontend/                # React + Vite 프론트엔드 (:5173)
     ├── src/
     │   ├── components/         # AppHeader, Button, Card 등 공통 컴포넌트
     │   ├── hooks/              # AuthContext (Firebase 연동)
