@@ -11,6 +11,7 @@ import os
 import time
 import asyncio
 import json
+import re
 from pathlib import Path
 from uuid import uuid4
 from typing import Any, Dict, List, Optional
@@ -121,7 +122,10 @@ ADD_MISSING_POINT_DECLARATION = {
     "description": (
         "학생이 답변에서 누락했거나 불충분하게 설명한 개념/포인트를 Missing 목록에 등록합니다. "
         "학생의 답변을 평가한 후, 부족하다고 판단되는 부분마다 이 도구를 호출하세요. "
-        "이미 Missing 목록에 있는 항목은 중복 등록하지 마세요."
+        "중요: 이미 Missing 목록에 있거나 비슷한 내용이 있는 항목은 절대 중복 등록하지 마세요. "
+        "만약 학생이 특정 개념을 너무 몰라서 AI가 직접 설명해 주어야 했다면, 기존의 어려운 해당 항목은 "
+        "mark_completed로 보류/해결 처리하고, 대신 이 도구를 사용해 더 상세하고 기초적인 내용으로 "
+        "새로운 학습 목표(Missing 항목)를 추가해 주세요."
     ),
     "parameters": {
         "type": "object",
@@ -674,7 +678,14 @@ async def _forward_gemini_to_client(
                     # AI 음성 자막 (output_audio_transcription)
                     if hasattr(sc, "output_transcription") and sc.output_transcription:
                         text = getattr(sc.output_transcription, "text", None)
-                        if text and text.strip():
+                        if text:
+                            # 필터링: 제어 토큰 및 툴 이름 발화 제거
+                            text = re.sub(r'<ctrl\d+>', '', text)
+                            text = text.replace('search_db()', '').replace('search_db', '')
+                            text = text.replace('add_missing_point()', '').replace('add_missing_point', '')
+                            text = text.replace('mark_completed()', '').replace('mark_completed', '')
+                            text = text.strip()
+                        if text:
                             _append_transcript(session, "ai", text)
                             await websocket.send_json({
                                 "type": "output_transcript",
