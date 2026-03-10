@@ -825,6 +825,22 @@ async def _handle_tool_calls(
                     },
                 })
 
+                # 모든 학습 목표 달성 시 → Gemini가 마무리 멘트 후 세션 종료
+                if not session.get("missing_points"):
+                    print(f"[{session_id}] 🎉 모든 학습 목표 달성 — 세션 종료 예약")
+                    try:
+                        await gemini_session.send_client_content(
+                            turns={"parts": [{"text": (
+                                "모든 학습 목표가 완료되었습니다. "
+                                "학생에게 '모든 내용을 학습하셨네요! 오늘 수고하셨습니다.' 라고 "
+                                "따뜻하게 마무리 인사를 해주세요. 그 이상의 질문은 하지 마세요."
+                            )}]},
+                            turn_complete=True,
+                        )
+                    except Exception as e:
+                        print(f"[{session_id}] [Warning] 마무리 멘트 주입 실패: {e}")
+                    session["active"] = False
+
         else:
             result_text = f"알 수 없는 도구: {fc.name}"
 
