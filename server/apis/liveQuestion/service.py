@@ -55,7 +55,7 @@ async def _generate_initial_goals(keys: List[str], aio_client) -> List[str]:
     
     try:
         response = await aio_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3-flash-preview",
             contents=prompt
         )
         print("[Gemini] Response:", response.text)
@@ -252,17 +252,67 @@ def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
         return f"검색 중 오류 발생: {str(e)}"
 
 
-def execute_add_missing_point(session_id: str, point: str) -> str:
-    """Missing 목록에 포인트 추가"""
+async def _is_duplicate_point(point: str, existing_points: List[str]) -> bool:
+    """
+    gemini-3.1-flash-lite-preview를 사용해 새로운 포인트가 기존 목록과
+    의미론적으로 중복인지 확인합니다.
+    API 오류 시 False를 반환해 추가를 허용합니다.
+    """
+    if not existing_points:
+        return False
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return False
+
+    existing_text = "\n".join(f"- {p}" for p in existing_points)
+    prompt = (
+        "당신은 학습 포인트 중복 감지 전문가입니다.\n"
+        "아래 '새 포인트'가 '기존 목록'의 항목과 의미론적으로 동일하거나 "
+        "매우 유사한지 판단하세요. 단어가 달라도 핵심 개념이 같으면 중복입니다.\n\n"
+        f"[새 포인트]\n{point}\n\n"
+        f"[기존 목록]\n{existing_text}\n\n"
+        "중복이면 'YES', 중복이 아니면 'NO'만 답하세요. 절대 다른 말을 하지 마세요."
+    )
+
+    try:
+        aio_client = genai.Client(api_key=api_key)
+        response = await aio_client.aio.models.generate_content(
+            model="gemini-3.1-flash-lite-preview",
+            contents=prompt,
+        )
+        answer = response.text.strip().upper()
+        print(f"[DuplicateCheck] '{point[:40]}...' → {answer}")
+        return answer.startswith("YES")
+    except Exception as e:
+        print(f"[Warning] [DuplicateCheck] 중복 체크 실패, 추가 허용: {e}")
+        return False
+
+
+async def execute_add_missing_point(session_id: str, point: str) -> str:
+    """Missing 목록에 포인트 추가 (의미론적 중복 체크 포함)"""
     session = live_sessions.get(session_id)
     if not session:
         return "세션을 찾을 수 없습니다."
 
-    missing = session.setdefault("missing_points", [])
+    missing   = session.setdefault("missing_points", [])
+    completed = session.setdefault("completed_points", [])
 
-    # 중복 방지
+    # 1) 정확한 문자열 중복 방지
     if point in missing:
         return f"이미 Missing 목록에 있습니다: {point}"
+
+    # 2) Completed 목록에도 없는지 확인
+    completed_texts = [e.get("point", "") for e in completed]
+    if point in completed_texts:
+        return f"이미 Completed 목록에 있습니다: {point}"
+
+    # 3) 의미론적 중복 체크 (gemini-3.1-flash-lite-preview)
+    all_existing = missing + completed_texts
+    is_dup = await _is_duplicate_point(point, all_existing)
+    if is_dup:
+        print(f"[{session_id}] ⚠️  의미론적 중복으로 거부: {point}")
+        return f"의미론적으로 유사한 항목이 이미 존재합니다 (추가 거부): '{point}'"
 
     missing.append(point)
     save_md_files(session_id)
@@ -746,7 +796,7 @@ async def _handle_tool_calls(
 
         elif fc.name == "add_missing_point":
             point = fc.args.get("point", "")
-            result_text = execute_add_missing_point(session_id, point)
+            result_text = await execute_add_missing_point(session_id, point)
 
             # 프론트엔드에 Missing 목록 변경 알림
             session = live_sessions.get(session_id)
