@@ -2,7 +2,7 @@
  * firebase.ts — Firebase 앱 초기화
  */
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider } from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,3 +15,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig)
 export const firebaseAuth = getAuth(app)
+export const googleProvider = new GoogleAuthProvider()
