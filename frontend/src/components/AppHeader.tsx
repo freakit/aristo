@@ -141,7 +141,7 @@ export const AppHeader: React.FC = () => {
       </Center>
 
       <Right>
-        <LogoutBtn onClick={() => { logout(); navigate('/') }}>Log Out</LogoutBtn>
+        <LogoutBtn onClick={async () => { await logout(); navigate('/') }}>Log Out</LogoutBtn>
       </Right>
     </Header>
   )

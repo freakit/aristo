@@ -1,10 +1,9 @@
 /**
  * AuthContext.tsx
  *
- * - 로그인/회원가입은 더미 방식(클릭 즉시 상태 변경) 유지
- * - Firebase onAuthStateChanged로 실제 Firebase 유저가 있으면 그 토큰 사용
- * - 더미 로그인 상태에서는 토큰 없이 요청 (개발/테스트용)
- * - getIdToken(): 실제 Firebase 유저 있으면 토큰 반환, 없으면 null
+ * - signInWithPopup(googleProvider) 로 실제 Google 로그인
+ * - onAuthStateChanged 로 로그인 상태 유지
+ * - getIdToken(): Firebase ID 토큰 반환 (백엔드 인증용)
  */
 import React, {
   createContext,
@@ -14,46 +13,43 @@ import React, {
   useCallback,
   ReactNode,
 } from 'react'
-import { onAuthStateChanged, User } from 'firebase/auth'
-import { firebaseAuth } from '../lib/firebase'
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut,
+  User,
+} from 'firebase/auth'
+import { firebaseAuth, googleProvider } from '../lib/firebase'
 
 interface AuthContextType {
   isLoggedIn: boolean
   firebaseUser: User | null
-  login: () => void
-  logout: () => void
+  signInWithGoogle: () => Promise<void>
+  logout: () => Promise<void>
   getIdToken: () => Promise<string | null>
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  // 더미 로그인 상태 (로그인 버튼 클릭으로 제어)
-  const [isDummyLoggedIn, setIsDummyLoggedIn] = useState(false)
-  // 실제 Firebase 유저 (있으면 토큰 제공 가능)
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
-  const [firebaseLoading, setFirebaseLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
 
-  // Firebase Auth 상태 감지 (실제 Google 로그인 된 경우)
+  // Firebase Auth 상태 감지
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
       setFirebaseUser(user)
-      setFirebaseLoading(false)
-      // Firebase 유저가 있으면 자동으로 로그인 상태로 설정
-      if (user) {
-        setIsDummyLoggedIn(true)
-      }
+      setLoading(false)
     })
     return unsubscribe
   }, [])
 
-  const login = () => setIsDummyLoggedIn(true)
-  const logout = () => {
-    setIsDummyLoggedIn(false)
-    // Firebase 유저가 있으면 Firebase에서도 로그아웃
-    if (firebaseUser) {
-      firebaseAuth.signOut()
-    }
+  const signInWithGoogle = async () => {
+    await signInWithPopup(firebaseAuth, googleProvider)
+  }
+
+  const logout = async () => {
+    await signOut(firebaseAuth)
   }
 
   const getIdToken = useCallback(async (): Promise<string | null> => {
@@ -65,13 +61,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [firebaseUser])
 
-  const isLoggedIn = isDummyLoggedIn || !!firebaseUser
+  const isLoggedIn = !!firebaseUser
 
-  // Firebase 초기 상태 로딩 중에는 children 렌더링 대기
-  if (firebaseLoading) return null
+  if (loading) return null
 
   return (
-    <AuthContext.Provider value={{ isLoggedIn, firebaseUser, login, logout, getIdToken }}>
+    <AuthContext.Provider value={{ isLoggedIn, firebaseUser, signInWithGoogle, logout, getIdToken }}>
       {children}
     </AuthContext.Provider>
   )
