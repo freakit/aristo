@@ -185,7 +185,7 @@ export const AimPage: React.FC = () => {
     setCreating(true)
     setCreateError('')
     try {
-      // 선택된 소스들의 key 목록
+      // Key list of selected sources
       const selectedSources = sources.filter(s => selectedDocIds.includes(s.docId))
       const vectorKeys = selectedSources.map(s => s.key)
       const title = `${mode === 'basic' ? 'Conceptual' : 'Applied'} Study — ${selectedSources.map(s => s.source).join(', ')}`
@@ -208,7 +208,7 @@ export const AimPage: React.FC = () => {
         return
       }
       
-      // 2. 백엔드에서 세션 생성
+      // 2. Create session in backend
       const result = await api.post<CreatedSession>('/sessions', {
         title,
         vectorDocIds: selectedDocIds,

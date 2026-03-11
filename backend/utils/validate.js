@@ -1,10 +1,10 @@
 // backend/utils/validate.js
 
 /**
- * 필수 필드 검증 헬퍼
- * @param {Object} body - 요청 바디
- * @param {Array<string>} fields - 필수 필드 목록
- * @returns {string|null} - 누락된 필드가 없으면 null, 있으면 에러 메시지
+ * Required field validation helper
+ * @param {Object} body - Request body
+ * @param {Array<string>} fields - Required field list
+ * @returns {string|null} - null if no missing fields, otherwise error message
  */
 exports.validateRequired = (body, fields) => {
   const missing = fields.filter((field) => !body[field]);
@@ -15,14 +15,14 @@ exports.validateRequired = (body, fields) => {
 };
 
 /**
- * 컨트롤러용 검증 미들웨어 래퍼 (선택적)
- * 사용법: if (check(res, body, ['id', 'name'])) return;
+ * Controller-level validation middleware wrapper (optional)
+ * Usage: if (check(res, body, ['id', 'name'])) return;
  */
 exports.checkValidation = (res, body, fields) => {
   const error = exports.validateRequired(body, fields);
   if (error) {
     res.status(400).json({ error });
-    return false; // 검증 실패
+    return false; // validation failed
   }
-  return true; // 검증 성공
+  return true; // validation passed
 };

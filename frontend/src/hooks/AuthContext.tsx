@@ -1,9 +1,9 @@
 /**
  * AuthContext.tsx
  *
- * - signInWithPopup(googleProvider) 로 실제 Google 로그인
- * - onAuthStateChanged 로 로그인 상태 유지
- * - getIdToken(): Firebase ID 토큰 반환 (백엔드 인증용)
+ * - signInWithPopup(googleProvider) for actual Google sign-in
+ * - onAuthStateChanged to maintain login state
+ * - getIdToken(): Returns Firebase ID token (for backend authentication)
  */
 import React, {
   createContext,
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Firebase Auth 상태 감지
+  // Detect Firebase Auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
       setFirebaseUser(user)

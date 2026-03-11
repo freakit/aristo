@@ -1,5 +1,5 @@
 """
-RAG & 학습목표 생성 진단 스크립트
+RAG & Learning Objective Generation Diagnosis Script
 """
 import os
 import asyncio
@@ -10,47 +10,47 @@ from dotenv import load_dotenv
 load_dotenv()
 
 print("=" * 60)
-print("1. ChromaDB 저장 현황")
+print("1. ChromaDB Storage Status")
 print("=" * 60)
 client = chromadb.PersistentClient(path="chroma_db")
 cols = client.list_collections()
-print(f"컬렉션 수: {len(cols)}")
+print(f"Number of collections: {len(cols)}")
 
 for col in cols:
     all_docs = col.get(include=["metadatas", "documents"])
     sources = Counter(m.get("source", "?") for m in all_docs["metadatas"])
     keys = Counter(m.get("key", "?") for m in all_docs["metadatas"])
     
-    print(f"\n컬렉션: {col.name}  총 청크: {col.count()}")
-    print("  파일별 청크 수:")
+    print(f"\nCollection: {col.name}  Total chunks: {col.count()}")
+    print("  Chunks by file:")
     for s, c in sources.items():
         k = [m.get("key","") for m in all_docs["metadatas"] if m.get("source") == s][0]
         print(f"    [OK] {s}: {c} chunks (key: {k})")
     
-    print("\n  Key 필터 검색 테스트:")
+    print("\n  Key filter search test:")
     for key in list(keys.keys()):
         result = col.get(where={"key": key}, include=["documents"])
         doc_count = len(result["documents"])
-        sample = result["documents"][0][:120] if result["documents"] else "(없음)"
+        sample = result["documents"][0][:120] if result["documents"] else "(None)"
         status = "[OK]" if doc_count > 0 else "[ERR]"
         print(f"    {status} key={key[:8]}... -> {doc_count} docs")
         print(f"       Sample: {sample}")
 
 print()
 print("=" * 60)
-print("2. 학습목표 생성 파이프라인 테스트")
+print("2. Learning Objective Generation Pipeline Test")
 print("=" * 60)
 
 async def test_goal_gen(key: str):
     from google import genai
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        print("❌ GEMINI_API_KEY 없음")
+        print("❌ No GEMINI_API_KEY")
         return
     
     client_ai = genai.Client(api_key=api_key)
     
-    # ChromaDB 직접 쿼리
+    # Direct query to ChromaDB
     db_client = chromadb.PersistentClient(path="chroma_db")
     col = db_client.get_collection("rag_documents")
     docs = col.get(where={"key": key}, include=["documents"])
@@ -63,9 +63,9 @@ async def test_goal_gen(key: str):
     text = "\n\n".join(docs["documents"][:10])
     
     prompt = (
-        "다음 학습 자료에서 학생이 오늘 필수로 마스터해야 할 핵심 개념이나 학습 목표 3가지를 구체적인 문장으로 추출해 주세요. "
-        "반드시 각 줄마다 답변 하나씩, 총 3줄만 출력하세요. 번호나 글머리 기호 없이 순수한 내용 문장만 3줄 적으세요.\n\n"
-        f"[자료]\n{text}"
+        "Please extract 3 core concepts or learning objectives that the student must master today from the following learning material into specific sentences. "
+        "Be sure to output exactly 3 lines, one answer per line. Write 3 pure content sentences without numbers or bullets.\n\n"
+        f"[Material]\n{text}"
     )
     
     print(f"[Call] Calling Gemini API (gemini-3-flash-preview)...")
@@ -78,14 +78,14 @@ async def test_goal_gen(key: str):
     for i, g in enumerate(goals[:5], 1):
         print(f"  {i}. {g}")
 
-# 학습목표 생성 테스트 - ChromaDB의 첫 번째 key 사용
+# Learning Objective Generation Test - Use first key of ChromaDB
 db_client = chromadb.PersistentClient(path="chroma_db")
 for col in db_client.list_collections():
     all_docs = col.get(include=["metadatas"])
     if all_docs["metadatas"]:
         keys = list(set(m.get("key","") for m in all_docs["metadatas"] if m.get("key")))
         if keys:
-            print(f"\n테스트 Key: {keys[0]}")
+            print(f"\nTest Key: {keys[0]}")
             asyncio.run(test_goal_gen(keys[0]))
 
-print("\n진단 완료")
+print("\nDiagnosis complete")

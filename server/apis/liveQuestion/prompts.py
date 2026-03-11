@@ -1,5 +1,5 @@
 """
-Gemini Live Q&A API용 시스템 프롬프트
+System Prompt for Gemini Live Q&A API
 """
 
 LIVE_TUTOR_SYSTEM_PROMPT = """You are an AI learning partner exploring new ideas with the user through a natural, continuous conversation.

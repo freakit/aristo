@@ -9,19 +9,19 @@ module.exports = {
   coverageDirectory: "coverage",
   projects: [
     {
-      // 단위 테스트 — mock 사용, firebase 연결 없음
+      // Unit tests — use mocks, no Firebase connection
       displayName: "unit",
       testEnvironment: "node",
       testMatch: ["**/__tests__/services/**/*.test.js"],
       testTimeout: 10000,
     },
     {
-      // 통합 테스트 — 실제 Firestore 연결
+      // Integration tests — connects to real Firestore
       displayName: "integration",
       testEnvironment: "node",
       testMatch: ["**/__tests__/integration/**/*.integration.test.js"],
       testTimeout: 30000,
-      // ESM인 config/firebase.js를 CJS 헬퍼로 교체
+      // Replace ESM config/firebase.js with CJS helper
       moduleNameMapper: {
         "^../config/firebase$":
           "<rootDir>/__tests__/integration/setup/firebaseAdmin.js",

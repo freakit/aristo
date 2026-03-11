@@ -7,7 +7,7 @@ const { verifyFirebaseToken } = require("../middleware/auth.middleware");
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// PDF 업로드
+// Upload PDF
 router.post(
   "/upload",
   verifyFirebaseToken,
@@ -15,13 +15,13 @@ router.post(
   ragController.uploadPdf,
 );
 
-// SSE 로그 스트리밍
+// SSE log streaming
 router.get("/upload-logs/:key", verifyFirebaseToken, ragController.streamLogs);
 
-// 소스 목록 조회
+// Get source list
 router.get("/sources", verifyFirebaseToken, ragController.getSources);
 
-// 소스 삭제 (docId 기반)
+// Delete source (by docId)
 router.delete(
   "/sources/:docId",
   verifyFirebaseToken,

@@ -1,13 +1,13 @@
-# 1. 페이지 나누기 (한 청크에 한 페이지)
-# 2. 영어(문서와 같은 언어)로 검색
-# 3. 키워드 검색 추가하기(?) -> 하이브리드 검색
-# 4. 리랭킹 시스템 추가 (10~20개 먼저 가져오기 -> 정교하게 리랭커 하기)
+# 1. Paginate (one page per chunk)
+# 2. Search in English (same language as document)
+# 3. Add keyword search (?) -> Hybrid search
+# 4. Add reranking system (Get 10-20 first -> sophisticated reranking)
 
 """
 Vector Database Manager for RAG
-ChromaDB를 사용한 벡터 데이터베이스 관리 모듈
+Vector database management module using ChromaDB
 
-임베딩 모델:
+Embedding model:
 - Google Gemini: gemini-embedding-001
 """
 
@@ -21,30 +21,30 @@ from dotenv import load_dotenv
 import chromadb
 from chromadb.config import Settings
 
-# LangChain 임베딩
+# LangChain Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# 환경 변수 로드
+# Load environment variables
 load_dotenv()
 
 
 class EmbeddingManager:
     """
-    Gemini 임베딩 모델 관리 클래스
+    Gemini embedding model management class
     
-    사용 모델:
+    Used model:
     - Google Gemini gemini-embedding-001
     """
     
     def __init__(self):
-        """임베딩 매니저 초기화"""
+        """Initialize embedding manager"""
         self.embeddings = self._create_embeddings()
     
     def _create_embeddings(self):
-        """임베딩 모델 인스턴스 생성"""
+        """Create embedding model instance"""
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
+            raise ValueError("GEMINI_API_KEY environment variable is not set.")
         
         return GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001",
@@ -52,22 +52,22 @@ class EmbeddingManager:
         )
     
     def embed_text(self, text: str) -> List[float]:
-        """단일 텍스트 임베딩"""
+        """Single text embedding"""
         return self.embeddings.embed_query(text)
     
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """여러 텍스트 임베딩"""
+        """Multiple texts embedding"""
         return self.embeddings.embed_documents(texts)
 
 
 class VectorDBManager:
     """
-    ChromaDB 기반 벡터 데이터베이스 관리 클래스
+    Vector database management class based on ChromaDB
     
-    기능:
-    - 청크 데이터를 벡터 DB에 저장
-    - 유사도 검색
-    - 컬렉션 관리
+    Features:
+    - Save chunk data to Vector DB
+    - Similarity search
+    - Collection management
     """
     
     def __init__(
@@ -77,24 +77,24 @@ class VectorDBManager:
     ):
         """
         Args:
-            persist_directory: ChromaDB 영구 저장 디렉토리
-            collection_name: 컬렉션 이름
+            persist_directory: ChromaDB persistent storage directory
+            collection_name: Collection name
         """
         self.persist_directory = Path(persist_directory)
         self.collection_name = collection_name
         
-        # 임베딩 매니저 초기화
+        # Initialize embedding manager
         self.embedding_manager = EmbeddingManager()
         
-        # ChromaDB 클라이언트 초기화 (영구 저장)
+        # Initialize ChromaDB client (persistent storage)
         self.client = chromadb.PersistentClient(
             path=str(self.persist_directory)
         )
         
-        # 컬렉션 가져오기 또는 생성
+        # Get or create collection
         self.collection = self.client.get_or_create_collection(
             name=collection_name,
-            metadata={"hnsw:space": "cosine"}  # 코사인 유사도 사용
+            metadata={"hnsw:space": "cosine"}  # Use cosine similarity
         )
         
         print(f"VectorDB initialized")
@@ -109,14 +109,14 @@ class VectorDBManager:
         batch_size: int = 100
     ) -> int:
         """
-        청크 데이터를 벡터 DB에 추가
+        Add chunk data to Vector DB
         
         Args:
-            chunks: 청크 리스트 (각 청크는 content, metadata 포함)
-            batch_size: 배치 크기
+            chunks: Chunk list (each chunk contains content, metadata)
+            batch_size: Batch size
             
         Returns:
-            추가된 청크 수
+            Number of added chunks
         """
         if not chunks:
             print("No chunks to add.")
@@ -126,7 +126,7 @@ class VectorDBManager:
         
         added_count = 0
         
-        # 배치 처리
+        # Batch processing
         for i in range(0, len(chunks), batch_size):
             batch = chunks[i:i + batch_size]
             
@@ -135,7 +135,7 @@ class VectorDBManager:
             ids = []
             
             for j, chunk in enumerate(batch):
-                # 메타데이터 처리 (ChromaDB는 기본 타입만 지원)
+                # Process metadata (ChromaDB only supports basic types)
                 metadata = chunk.get("metadata", {})
                 processed_metadata = {}
                 
@@ -149,16 +149,16 @@ class VectorDBManager:
                 
                 metadatas.append(processed_metadata)
                 
-                # 고유 ID 생성 (key 포함으로 같은 PDF 재업로드 시 충돌 방지)
+                # Generate unique ID (including key to prevent collision when re-uploading the same PDF)
                 source = metadata.get("source", "unknown")
                 key = metadata.get("key", "")
                 chunk_id = f"{key}_{i + j}" if key else f"{source}_{i + j}"
                 ids.append(chunk_id)
             
-            # 임베딩 생성
+            # Generate embeddings
             embeddings = self.embedding_manager.embed_texts(contents)
             
-            # ChromaDB에 추가
+            # Add to ChromaDB
             self.collection.add(
                 ids=ids,
                 embeddings=embeddings,
@@ -175,7 +175,7 @@ class VectorDBManager:
         return added_count
     
     def _build_keys_filter(self, keys: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
-        """keys 리스트를 ChromaDB where 필터로 변환"""
+        """Convert keys list to ChromaDB where filter"""
         if not keys or len(keys) == 0:
             return None
         if len(keys) == 1:
@@ -190,25 +190,25 @@ class VectorDBManager:
         keys: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        유사도 검색
+        Similarity search
         
         Args:
-            query: 검색 쿼리
-            n_results: 반환할 결과 수
-            filter_metadata: 메타데이터 필터
-            keys: 특정 key만 검색 (None이면 전체 검색)
+            query: Search query
+            n_results: Number of results to return
+            filter_metadata: Metadata filter
+            keys: Search specific keys only (search all if None)
             
         Returns:
-            검색 결과 리스트
+            Search result list
         """
-        # keys 필터 빌드
+        # Build keys filter
         if filter_metadata is None:
             filter_metadata = self._build_keys_filter(keys)
         
-        # 쿼리 임베딩
+        # Query embedding
         query_embedding = self.embedding_manager.embed_text(query)
         
-        # 검색 실행
+        # Execute search
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results,
@@ -216,7 +216,7 @@ class VectorDBManager:
             include=["documents", "metadatas", "distances"]
         )
         
-        # 결과 포맷팅
+        # Format results
         formatted_results = []
         
         if results["ids"] and results["ids"][0]:
@@ -239,24 +239,24 @@ class VectorDBManager:
         keys: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        BM25 기반 키워드 검색
+        BM25-based keyword search
         
         Args:
-            query: 검색 쿼리
-            n_results: 반환할 결과 수
-            keys: 특정 key만 검색 (None이면 전체 검색)
+            query: Search query
+            n_results: Number of results to return
+            keys: Search specific keys only (search all if None)
             
         Returns:
-            검색 결과 리스트 (bm25_score 포함)
+            Search result list (includes bm25_score)
         """
         from rank_bm25 import BM25Okapi
         
-        # keys 필터가 있으면 해당 key의 문서만 가져오기
+        # Get documents of corresponding key if keys filter exists
         keys_filter = self._build_keys_filter(keys)
         if keys_filter:
             all_docs = self.collection.get(where=keys_filter, include=["documents", "metadatas"])
         else:
-            # 모든 문서 가져오기
+            # Get all documents
             all_docs = self.collection.get(include=["documents", "metadatas"])
         
         if not all_docs["ids"]:
@@ -266,26 +266,26 @@ class VectorDBManager:
         ids = all_docs["ids"]
         metadatas = all_docs["metadatas"]
         
-        # 토큰화
+        # Tokenization
         tokenized_docs = [doc.lower().split() for doc in documents]
         tokenized_query = query.lower().split()
         
-        # BM25 인덱스 생성
+        # Create BM25 index
         bm25 = BM25Okapi(tokenized_docs)
         
-        # 점수 계산
+        # Calculate scores
         scores = bm25.get_scores(tokenized_query)
         
-        # 결과 정렬
+        # Sort results
         doc_scores = list(zip(range(len(documents)), scores))
         doc_scores.sort(key=lambda x: x[1], reverse=True)
         
-        # 상위 n_results 반환
+        # Return top n_results
         results = []
         max_score = max(scores) if scores.any() else 1.0
         
         for idx, score in doc_scores[:n_results]:
-            if score > 0:  # 점수가 0보다 큰 것만
+            if score > 0:  # Only if score is greater than 0
                 result = {
                     "id": ids[idx],
                     "content": documents[idx],
@@ -308,55 +308,55 @@ class VectorDBManager:
         keys: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        하이브리드 검색 (벡터 + BM25 + 리랭킹)
+        Hybrid search (Vector + BM25 + Reranking)
         
         Args:
-            query: 검색 쿼리
-            n_results: 최종 반환할 결과 수
-            use_reranking: 리랭킹 사용 여부
-            vector_weight: 벡터 검색 가중치 (0-1)
-            keyword_weight: 키워드 검색 가중치 (0-1)
-            initial_k: 초기 후보 수
-            keys: 특정 key만 검색 (None이면 전체 검색)
+            query: Search query
+            n_results: Final number of results to return
+            use_reranking: Whether to use reranking
+            vector_weight: Vector search weight (0-1)
+            keyword_weight: Keyword search weight (0-1)
+            initial_k: Number of initial candidates
+            keys: Search specific keys only (search all if None)
             
         Returns:
-            하이브리드 검색 결과 리스트
+            Hybrid search result list
         """
-        # 1. 벡터 검색
+        # 1. Vector search
         vector_results = self.search(query, n_results=initial_k, keys=keys)
         
-        # 2. 키워드 검색
+        # 2. Keyword search
         try:
             keyword_results = self.keyword_search(query, n_results=initial_k, keys=keys)
         except Exception as e:
-            print(f"키워드 검색 오류, 벡터 검색만 사용: {e}")
+            print(f"Keyword search error, using vector search only: {e}")
             keyword_results = []
         
-        # 3. RRF (Reciprocal Rank Fusion) 점수 결합
+        # 3. Combine scores using RRF (Reciprocal Rank Fusion)
         rrf_scores = {}
-        k = 60  # RRF 상수
+        k = 60  # RRF constant
         
-        # 벡터 검색 결과 점수
+        # Vector search result scores
         for rank, doc in enumerate(vector_results):
             doc_id = doc["id"]
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + vector_weight * (1 / (k + rank + 1))
             if doc_id not in rrf_scores:
                 rrf_scores[doc_id] = {"doc": doc, "score": 0}
         
-        # ID -> 문서 매핑
+        # ID -> Document mapping
         doc_map = {doc["id"]: doc for doc in vector_results}
         
-        # 키워드 검색 결과 점수 추가
+        # Add keyword search result scores
         for rank, doc in enumerate(keyword_results):
             doc_id = doc["id"]
             rrf_scores[doc_id] = rrf_scores.get(doc_id, 0) + keyword_weight * (1 / (k + rank + 1))
             if doc_id not in doc_map:
                 doc_map[doc_id] = doc
         
-        # 점수로 정렬
+        # Sort by score
         sorted_ids = sorted(rrf_scores.keys(), key=lambda x: rrf_scores[x], reverse=True)
         
-        # 결과 구성
+        # Construct results
         combined_results = []
         for doc_id in sorted_ids[:initial_k]:
             if doc_id in doc_map:
@@ -364,14 +364,14 @@ class VectorDBManager:
                 doc["hybrid_score"] = rrf_scores[doc_id]
                 combined_results.append(doc)
         
-        # 4. 리랭킹 적용 (선택)
+        # 4. Apply reranking (optional)
         if use_reranking and combined_results:
             try:
                 from apis.rag.reranker import get_reranker
                 reranker = get_reranker(use_llm=True)
                 combined_results = reranker.rerank(query, combined_results, top_k=n_results)
             except Exception as e:
-                print(f"리랭킹 오류: {e}")
+                print(f"Reranking error: {e}")
                 combined_results = combined_results[:n_results]
         else:
             combined_results = combined_results[:n_results]
@@ -379,92 +379,92 @@ class VectorDBManager:
         return combined_results
     
     def load_chunks_from_json(self, json_path: str) -> List[Dict[str, Any]]:
-        """JSON 파일에서 청크 로드"""
+        """Load chunks from JSON file"""
         with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
     
     def add_from_json(self, json_path: str) -> int:
         """
-        JSON 파일에서 청크를 읽어 벡터 DB에 추가
+        Read chunks from JSON file and add to Vector DB
         
         Args:
-            json_path: 청크 JSON 파일 경로
+            json_path: Chunk JSON file path
             
         Returns:
-            추가된 청크 수
+            Number of added chunks
         """
         json_path = Path(json_path)
         
         if not json_path.exists():
-            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {json_path}")
+            raise FileNotFoundError(f"File not found: {json_path}")
         
         print(f"\n{'='*60}")
-        print(f"JSON 파일 로드: {json_path.name}")
+        print(f"Loading JSON file: {json_path.name}")
         print(f"{'='*60}")
         
         chunks = self.load_chunks_from_json(str(json_path))
-        print(f"  - 로드된 청크 수: {len(chunks)}")
+        print(f"  - Loaded chunks: {len(chunks)}")
         
         return self.add_chunks(chunks)
     
     def delete_by_source(self, source: str, key: Optional[str] = None) -> int:
         """
-        특정 소스(파일)의 청크를 벡터 DB에서 삭제
+        Delete chunks of a specific source (file) from Vector DB
         
         Args:
-            source: 삭제할 소스 파일명 (예: "lec6_graph.pdf")
-            key: 특정 업로드 버전만 삭제 (None이면 해당 소스 전체 삭제)
+            source: Source filename to delete (e.g., "lec6_graph.pdf")
+            key: Delete specific upload version only (delete all corresponding source if None)
             
         Returns:
-            삭제된 청크 수
+            Number of deleted chunks
         """
         if key:
-            print(f"\n소스 '{source}' (key: {key})의 청크 삭제 중...")
+            print(f"\nsource '{source}' (key: {key}) chunks...")
             where_filter = {"$and": [{"source": source}, {"key": key}]}
         else:
-            print(f"\n소스 '{source}'의 모든 청크 삭제 중...")
+            print(f"\nsource '{source}' all chunks...")
             where_filter = {"source": source}
         
-        # 해당 소스의 모든 문서 조회
+        # Retrieve all documents of the corresponding source
         results = self.collection.get(
             where=where_filter,
             include=["metadatas"]
         )
         
         if not results["ids"]:
-            print(f"  - 해당하는 청크가 없습니다.")
+            print(f"  - No corresponding chunks found.")
             return 0
         
-        # 삭제 실행
+        # Execute delete
         delete_count = len(results["ids"])
         self.collection.delete(ids=results["ids"])
         
-        print(f"✓ {delete_count}개 청크 삭제 완료")
-        print(f"  - 현재 DB 문서 수: {self.collection.count()}")
+        print(f"✓ {delete_count} chunks deleted")
+        print(f"  - Current DB documents: {self.collection.count()}")
         
         return delete_count
     
     def delete_by_ids(self, ids: List[str]) -> int:
         """
-        ID 리스트로 청크 삭제
+        Delete chunks by ID list
         
         Args:
-            ids: 삭제할 문서 ID 리스트
+            ids: List of document IDs to delete
             
         Returns:
-            삭제된 청크 수
+            Number of deleted chunks
         """
         if not ids:
-            print("삭제할 ID가 없습니다.")
+            print("No IDs to delete.")
             return 0
         
         self.collection.delete(ids=ids)
-        print(f"✓ {len(ids)}개 청크 삭제 완료")
+        print(f"✓ {len(ids)} chunks deleted")
         
         return len(ids)
 
     def delete_by_key(self, key: str) -> int:
-        """특정 key로 청크 삭제"""
+        """Delete chunks by specific key"""
         try:
             results = self.collection.get(where={"key": key})
             if not results or not results["ids"]:
@@ -473,23 +473,23 @@ class VectorDBManager:
             self.collection.delete(ids=results["ids"])
             return len(results["ids"])
         except Exception as e:
-            print(f"Key 삭제 실패: {e}")
+            print(f"Key deletion failed: {e}")
         return 0
     
     def list_sources(self) -> List[Dict[str, Any]]:
         """
-        벡터 DB에 저장된 모든 소스(파일) 목록 조회
+        Retrieve list of all sources (files) stored in Vector DB
         
         Returns:
-            소스별 청크 수 및 key 목록 정보 리스트
+            List of source information including chunk count and keys
         """
-        # 모든 문서의 메타데이터 조회
+        # Retrieve metadata of all documents
         results = self.collection.get(include=["metadatas"])
         
         if not results["metadatas"]:
             return []
         
-        # 소스별 카운트 및 key 수집
+        # Collect count and keys by source
         source_info: Dict[str, Dict[str, Any]] = {}
         for metadata in results["metadatas"]:
             source = metadata.get("source", "unknown")
@@ -501,7 +501,7 @@ class VectorDBManager:
             if key:
                 source_info[source]["keys"].add(key)
         
-        # 결과 정리
+        # Organize results
         sources = [
             {
                 "source": source,
@@ -514,12 +514,12 @@ class VectorDBManager:
         return sources
     
     def delete_collection(self) -> None:
-        """현재 컬렉션 삭제"""
+        """Delete current collection"""
         self.client.delete_collection(name=self.collection_name)
-        print(f"컬렉션 '{self.collection_name}' 삭제됨")
+        print(f"Collection '{self.collection_name}' deleted")
     
     def get_collection_info(self) -> Dict[str, Any]:
-        """컬렉션 정보 반환"""
+        """Return collection info"""
         return {
             "name": self.collection_name,
             "count": self.collection.count(),
@@ -528,105 +528,105 @@ class VectorDBManager:
 
 
 def main():
-    """CLI 진입점 및 사용 예시"""
+    """CLI Entry point and usage examples"""
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="ChromaDB 기반 벡터 데이터베이스 관리",
+        description="Vector database management based on ChromaDB",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-예시:
-  # JSON 파일에서 청크 추가
+Example:
+  # Add chunks from JSON file
   python vectordb.py add --input output/document_chunked.json
   
-  # 검색 테스트
-  python vectordb.py search --query "가속도 법칙이란?"
+  # Search test
+  python vectordb.py search --query "What is the law of acceleration?"
   
-  # 등록된 소스 목록 확인
+  # Check registered source list
   python vectordb.py list
   
-  # 특정 소스 삭제
+  # Delete specific source
   python vectordb.py delete --source "lec6_graph.pdf"
   
-  # 컬렉션 정보 확인
+  # Check collection info
   python vectordb.py info
 """
     )
     
-    subparsers = parser.add_subparsers(dest="command", help="명령")
+    subparsers = parser.add_subparsers(dest="command", help="Command")
     
-    # add 명령
-    add_parser = subparsers.add_parser("add", help="청크를 벡터 DB에 추가")
-    add_parser.add_argument("--input", "-i", required=True, help="입력 JSON 파일")
+    # add Command
+    add_parser = subparsers.add_parser("add", help="Add chunks to Vector DB")
+    add_parser.add_argument("--input", "-i", required=True, help="Input JSON file")
     add_parser.add_argument(
         "--collection", "-c",
         default="rag_documents",
-        help="컬렉션 이름 (기본값: rag_documents)"
+        help="Collection name (default: rag_documents)"
     )
     add_parser.add_argument(
         "--db-path",
         default="./chroma_db",
-        help="ChromaDB 저장 경로 (기본값: ./chroma_db)"
+        help="ChromaDB storage path (default: ./chroma_db)"
     )
     
-    # search 명령
-    search_parser = subparsers.add_parser("search", help="유사도 검색")
-    search_parser.add_argument("--query", "-q", required=True, help="검색 쿼리")
+    # search Command
+    search_parser = subparsers.add_parser("search", help="Similarity search")
+    search_parser.add_argument("--query", "-q", required=True, help="Search query")
     search_parser.add_argument(
         "--n", "-n",
         type=int,
         default=5,
-        help="반환할 결과 수 (기본값: 5)"
+        help="Number of results to return (default: 5)"
     )
     search_parser.add_argument(
         "--collection", "-c",
         default="rag_documents",
-        help="컬렉션 이름"
+        help="Collection name"
     )
     search_parser.add_argument(
         "--db-path",
         default="./chroma_db",
-        help="ChromaDB 저장 경로"
+        help="ChromaDB storage path"
     )
     
-    # info 명령
-    info_parser = subparsers.add_parser("info", help="컬렉션 정보 확인")
+    # info Command
+    info_parser = subparsers.add_parser("info", help="Check collection info")
     info_parser.add_argument(
         "--collection", "-c",
         default="rag_documents",
-        help="컬렉션 이름"
+        help="Collection name"
     )
     info_parser.add_argument(
         "--db-path",
         default="./chroma_db",
-        help="ChromaDB 저장 경로"
+        help="ChromaDB storage path"
     )
     
-    # list 명령 (소스 목록)
-    list_parser = subparsers.add_parser("list", help="등록된 소스 목록 확인")
+    # list Command (source list)
+    list_parser = subparsers.add_parser("list", help="Check registered source list")
     list_parser.add_argument(
         "--collection", "-c",
         default="rag_documents",
-        help="컬렉션 이름"
+        help="Collection name"
     )
     list_parser.add_argument(
         "--db-path",
         default="./chroma_db",
-        help="ChromaDB 저장 경로"
+        help="ChromaDB storage path"
     )
     
-    # delete 명령 (소스 삭제)
-    delete_parser = subparsers.add_parser("delete", help="특정 소스의 청크 삭제")
-    delete_parser.add_argument("--source", "-s", required=True, help="삭제할 소스 파일명")
+    # delete Command (delete source)
+    delete_parser = subparsers.add_parser("delete", help="Delete chunks of specific source")
+    delete_parser.add_argument("--source", "-s", required=True, help="Source filename to delete")
     delete_parser.add_argument(
         "--collection", "-c",
         default="rag_documents",
-        help="컬렉션 이름"
+        help="Collection name"
     )
     delete_parser.add_argument(
         "--db-path",
         default="./chroma_db",
-        help="ChromaDB 저장 경로"
+        help="ChromaDB storage path"
     )
     
     args = parser.parse_args()
@@ -637,7 +637,7 @@ def main():
             collection_name=args.collection
         )
         count = db.add_from_json(args.input)
-        print(f"\n✓ 완료: {count}개 청크가 벡터 DB에 추가되었습니다.")
+        print(f"\n✓ Complete: {count} chunks added to Vector DB.")
     
     elif args.command == "search":
         db = VectorDBManager(
@@ -645,16 +645,16 @@ def main():
             collection_name=args.collection
         )
         
-        print(f"\n검색 쿼리: {args.query}")
+        print(f"\nSearch query: {args.query}")
         print(f"{'='*60}")
         
         results = db.search(args.query, n_results=args.n)
         
         for i, result in enumerate(results):
-            print(f"\n[{i+1}] 유사도: {result['similarity']:.4f}")
+            print(f"\n[{i+1}] Similarity: {result['similarity']:.4f}")
             print(f"    ID: {result['id']}")
-            print(f"    메타데이터: {result['metadata']}")
-            print(f"    내용: {result['content'][:200]}...")
+            print(f"    Metadata: {result['metadata']}")
+            print(f"    Content: {result['content'][:200]}...")
     
     elif args.command == "info":
         db = VectorDBManager(
@@ -663,10 +663,10 @@ def main():
         )
         
         info = db.get_collection_info()
-        print(f"\n컬렉션 정보:")
-        print(f"  - 이름: {info['name']}")
-        print(f"  - 문서 수: {info['count']}")
-        print(f"  - 저장 경로: {info['persist_directory']}")
+        print(f"\nCollection Info:")
+        print(f"  - Name: {info['name']}")
+        print(f"  - Documents: {info['count']}")
+        print(f"  - Storage Path: {info['persist_directory']}")
     
     elif args.command == "list":
         db = VectorDBManager(
@@ -676,15 +676,15 @@ def main():
         
         sources = db.list_sources()
         
-        print(f"\n등록된 소스 목록:")
+        print(f"\nRegistered Source List:")
         print(f"{'='*60}")
         
         if not sources:
-            print("  등록된 소스가 없습니다.")
+            print("  No registered sources found.")
         else:
             for src in sources:
-                print(f"  - {src['source']}: {src['count']}개 청크")
-            print(f"\n총 {len(sources)}개 소스, {sum(s['count'] for s in sources)}개 청크")
+                print(f"  - {src['source']}: {src['count']} chunks")
+            print(f"\nTotal {len(sources)} sources, {sum(s['count'] for s in sources)} chunks")
     
     elif args.command == "delete":
         db = VectorDBManager(
@@ -694,7 +694,7 @@ def main():
         
         count = db.delete_by_source(args.source)
         if count > 0:
-            print(f"\n✓ 완료: 소스 '{args.source}'의 {count}개 청크가 삭제되었습니다.")
+            print(f"\n✓ Complete: source '{args.source}' {count} chunks have been deleted.")
     
     else:
         parser.print_help()

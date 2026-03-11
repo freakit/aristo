@@ -1,5 +1,5 @@
 /**
- * firebase.ts — Firebase 앱 초기화
+ * firebase.ts — Firebase app initialization
  */
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider } from 'firebase/auth'

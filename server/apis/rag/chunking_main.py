@@ -1,6 +1,6 @@
 """
 Document Chunker for RAG
-JSON 파일의 요소들을 RAG용 청크로 분할하는 모듈
+Module for splitting JSON file elements into RAG chunks
 """
 
 import os
@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 
-# tiktoken이 설치되어 있으면 사용, 아니면 문자 수 기반 추정
+# If tiktoken is installed, use it; otherwise use char-based token estimation
 try:
     import tiktoken
     TIKTOKEN_AVAILABLE = True
@@ -22,15 +22,15 @@ except ImportError:
 
 class DocumentChunker:
     """
-    JSON 파일의 요소들을 청크로 분할하는 클래스
+    Class to chunk elements from a JSON file
     
     Attributes:
-        min_chunk_tokens: 최소 청크 토큰 수 (기본값: 800)
-        max_chunk_tokens: 최대 청크 토큰 수 (기본값: 1000)
-        overlap_tokens: 오버랩 토큰 수 (기본값: 150)
-        use_sliding_window: 슬라이딩 윈도우 방식 사용 여부 (기본값: True)
-        window_size: 슬라이딩 윈도우 크기 - 페이지 수 (기본값: 1)
-        overlap_pages: 오버랩 페이지 수 (기본값: 1)
+        min_chunk_tokens: Minimum chunk token count (default: 800)
+        max_chunk_tokens: Maximum chunk token count (default: 1000)
+        overlap_tokens: Overlap token count (default: 150)
+        use_sliding_window: Whether to use sliding window (default: True)
+        window_size: Sliding window size - number of pages (default: 1)
+        overlap_pages: Overlap page count (default: 1)
     """
     
     def __init__(
@@ -50,7 +50,7 @@ class DocumentChunker:
         self.window_size = window_size
         self.overlap_pages = overlap_pages
         
-        # tiktoken 인코더 초기화
+        # Initialize tiktoken encoder
         if TIKTOKEN_AVAILABLE:
             try:
                 self.encoder = tiktoken.encoding_for_model(model)
@@ -60,25 +60,25 @@ class DocumentChunker:
             self.encoder = None
     
     def count_tokens(self, text: str) -> int:
-        """텍스트의 토큰 수를 계산합니다."""
+        """Calculate number of tokens in text."""
         if self.encoder:
             return len(self.encoder.encode(text))
         else:
-            # 문자 수 기반 추정 (1 토큰 ≈ 4 문자)
+            # Character-based estimation (1 token ≈ 4 chars)
             return len(text) // 4
     
     def split_into_sentences(self, text: str) -> List[str]:
         """
-        텍스트를 문장 단위로 분할합니다.
+        Split text into sentences.
         
-        문장 부호 (. ! ?)로 끝나는 문장을 기준으로 분할하되,
-        약어 (e.g., Mr., Dr., etc.)를 고려합니다.
+        Splits mainly based on sentence-ending punctuations (. ! ?)
+        while considering abbreviations (e.g., Mr., Dr., etc.).
         """
-        # 문장 분할 패턴
-        # 약어 패턴을 제외하고 . ! ? 뒤에 공백이나 문장 끝이 오는 경우
+        # Sentence split pattern
+        # Behind . ! ? followed by space or end of string, excluding abbreviation patterns
         sentence_endings = re.compile(r'(?<=[.!?])\s+(?=[A-Z가-힣])|(?<=[.!?])$')
         
-        # 먼저 줄바꿈으로 분할
+        # Split by newline first
         lines = text.split('\n')
         sentences = []
         
@@ -86,7 +86,7 @@ class DocumentChunker:
             if not line.strip():
                 continue
             
-            # 문장 부호로 분할
+            # Split by punctuation
             parts = sentence_endings.split(line)
             for part in parts:
                 part = part.strip()
@@ -97,7 +97,7 @@ class DocumentChunker:
     
     def split_long_text(self, text: str, max_tokens: int) -> List[str]:
         """
-        긴 텍스트를 문장 단위로 분할하여 max_tokens 이하로 만듭니다.
+        Split long text into sentences so it is under max_tokens.
         """
         if self.count_tokens(text) <= max_tokens:
             return [text]
@@ -109,14 +109,14 @@ class DocumentChunker:
         for sentence in sentences:
             sentence_tokens = self.count_tokens(sentence)
             
-            # 단일 문장이 max_tokens보다 긴 경우
+            # If a single sentence is longer than max_tokens
             if sentence_tokens > max_tokens:
-                # 현재 청크 저장
+                # Save current chunk
                 if current_chunk:
                     chunks.append(current_chunk.strip())
                     current_chunk = ""
                 
-                # 문장을 단어 단위로 분할
+                # Split sentence by words
                 words = sentence.split()
                 word_chunk = ""
                 for word in words:
@@ -144,7 +144,7 @@ class DocumentChunker:
         return chunks
     
     def merge_metadata(self, elements: List[Dict[str, Any]], source: str, key: str = "", uploaded_at: str = "") -> Dict[str, Any]:
-        """여러 요소의 메타데이터를 병합합니다."""
+        """Merge metadata from multiple elements."""
         types: Set[str] = set()
         pages: Set[int] = set()
         image_paths: List[str] = []
@@ -152,17 +152,17 @@ class DocumentChunker:
         for elem in elements:
             metadata = elem.get("metadata", {})
             
-            # type 수집
+            # Collect type
             elem_type = metadata.get("type")
             if elem_type:
                 types.add(elem_type)
             
-            # page 수집
+            # Collect page
             page = metadata.get("page")
             if page is not None:
                 pages.add(page)
             
-            # image_path 수집
+            # Collect image_path
             image_path = metadata.get("image_path")
             if image_path:
                 image_paths.append(image_path)
@@ -175,14 +175,14 @@ class DocumentChunker:
             "page": sorted(list(pages))
         }
         
-        # 이미지 경로가 있으면 추가
+        # Add image path if present
         if image_paths:
             merged["image_path"] = image_paths if len(image_paths) > 1 else image_paths[0]
         
         return merged
     
     def get_overlap_text(self, text: str) -> str:
-        """청크의 마지막 부분에서 오버랩 텍스트를 추출합니다."""
+        """Extract overlap text from the end of a chunk."""
         if self.count_tokens(text) <= self.overlap_tokens:
             return text
         
@@ -190,7 +190,7 @@ class DocumentChunker:
         if not sentences:
             return ""
         
-        # 뒤에서부터 문장을 추가하여 오버랩 토큰 수에 맞춤
+        # Match overlap token count by adding sentences from the end
         overlap_text = ""
         for sentence in reversed(sentences):
             test_text = sentence + " " + overlap_text if overlap_text else sentence
@@ -203,13 +203,13 @@ class DocumentChunker:
     
     def group_elements_by_page(self, elements: List[Dict[str, Any]]) -> Dict[int, List[Dict[str, Any]]]:
         """
-        요소들을 페이지 번호별로 그룹화합니다.
+        Group elements by page number.
         
         Args:
-            elements: 요소 리스트
+            elements: List of elements
             
         Returns:
-            페이지 번호를 키로, 해당 페이지의 요소 리스트를 값으로 하는 딕셔너리
+            Dictionary with page number as key and list of elements as value
         """
         page_groups: Dict[int, List[Dict[str, Any]]] = {}
         
@@ -222,7 +222,7 @@ class DocumentChunker:
         return page_groups
     
     def get_page_content(self, page_elements: List[Dict[str, Any]]) -> str:
-        """페이지 요소들의 컨텐츠를 합칩니다."""
+        """Combine contents of page elements."""
         content_parts = []
         for elem in page_elements:
             content = elem.get("content", "")
@@ -232,15 +232,15 @@ class DocumentChunker:
     
     def get_sentence_based_overlap(self, text: str, target_tokens: int) -> str:
         """
-        토큰 수를 기준으로 문장 단위 오버랩 텍스트를 추출합니다.
-        문장 경계를 존중하여 자연스러운 오버랩을 생성합니다.
+        Extract sentence-based overlap text bounded by token count.
+        Preserves sentence boundaries for natural overlap.
         
         Args:
-            text: 원본 텍스트
-            target_tokens: 목표 오버랩 토큰 수
+            text: Original text
+            target_tokens: Target overlap token count
             
         Returns:
-            오버랩 텍스트 (문장 단위로 잘림)
+            Overlap text (truncated by sentences)
         """
         if self.count_tokens(text) <= target_tokens:
             return text
@@ -249,7 +249,7 @@ class DocumentChunker:
         if not sentences:
             return ""
         
-        # 뒤에서부터 문장을 추가하여 목표 토큰 수에 맞춤
+        # Satisfy target token count by adding sentences from the end
         overlap_sentences = []
         current_tokens = 0
         
@@ -265,37 +265,37 @@ class DocumentChunker:
     
     def chunk_elements_sliding_window(self, elements: List[Dict[str, Any]], source: str, key: str = "", uploaded_at: str = "") -> List[Dict[str, Any]]:
         """
-        최대 2페이지 기반 슬라이딩 윈도우 청킹.
+        Sliding window chunking based on up to 2 pages.
         
-        동작 방식:
-        1. 최대 2페이지까지만 한 청크에 포함
-        2. 2페이지 합쳐서 max_tokens 초과 시 → 두 번째 페이지를 문장 단위로 분할
-        3. 분할된 뒷부분은 다음 청크로 (오버랩 포함)
+        Behavior:
+        1. Include up to 2 pages in one chunk
+        2. If 2 pages combined exceed max_tokens -> Split the second page by sentences
+        3. The leftover part moves to the next chunk (including overlap)
         
-        예시:
-        - Page 4(200토큰) + Page 5(300토큰) = 500토큰 → 한 청크
-        - Page 7(500토큰) + Page 8(600토큰) = 1100토큰 > max(1000)
-          → Page 7 + Page 8 일부(500토큰) = 1000토큰 청크
-          → Page 8 나머지(100토큰) + 오버랩 → 다음 청크로
+        Example:
+        - Page 4 (200 tokens) + Page 5 (300 tokens) = 500 tokens -> One chunk
+        - Page 7 (500 tokens) + Page 8 (600 tokens) = 1100 tokens > max(1000)
+          -> Page 7 + Page 8 part (500 tokens) = 1000 tokens chunk
+          -> Page 8 rest (100 tokens) + overlap -> Next chunk
         
         Args:
-            elements: 요소 리스트 (content, metadata 포함)
-            source: 소스 파일명
+            elements: List of elements (including content, metadata)
+            source: Source filename
             
         Returns:
-            청크 리스트
+            Chunk list
         """
-        # 페이지별로 요소 그룹화
+        # Group elements by page
         page_groups = self.group_elements_by_page(elements)
         
         if not page_groups:
             return []
         
-        # 페이지 번호 정렬
+        # Sort page numbers
         sorted_pages = sorted(page_groups.keys())
         total_pages = len(sorted_pages)
         
-        # 각 페이지의 컨텐츠와 문장 단위 분할 미리 계산
+        # Precalculate sentence-level splits and contents for each page
         page_contents = {}
         page_sentences = {}
         for page_num in sorted_pages:
@@ -306,9 +306,9 @@ class DocumentChunker:
         chunks = []
         chunk_index = 0
         i = 0
-        carryover_text = ""  # 이전 페이지에서 넘어온 잘린 텍스트
-        carryover_page = None  # 잘린 텍스트가 속한 페이지 번호
-        prev_overlap_text = ""  # 오버랩용 텍스트
+        carryover_text = ""  # Tail text carried over from previous page
+        carryover_page = None  # Page number of the carryover text
+        prev_overlap_text = ""  # Text for overlap
         
         while i < total_pages:
             current_page = sorted_pages[i]
@@ -316,13 +316,13 @@ class DocumentChunker:
             included_pages = []
             current_elements = []
             
-            # 1. 오버랩 텍스트 추가 (첫 청크 제외)
+            # 1. Add overlap text (exclude first chunk)
             overlap_tokens = 0
             if prev_overlap_text:
-                current_content_parts.append(f"[이전 맥락]\n{prev_overlap_text}\n[현재 내용]")
+                current_content_parts.append(f"[Previous Context]\n{prev_overlap_text}\n[Current Content]")
                 overlap_tokens = self.count_tokens(prev_overlap_text)
             
-            # 2. 이전에서 넘어온 carryover 텍스트가 있으면 먼저 추가
+            # 2. Extract carryover text from previous iteration if any
             if carryover_text:
                 current_content_parts.append(carryover_text)
                 if carryover_page is not None:
@@ -330,7 +330,7 @@ class DocumentChunker:
                 carryover_text = ""
                 carryover_page = None
             
-            # 3. 현재 페이지 추가
+            # 3. Add current page
             page1_content = page_contents[current_page]
             page1_tokens = self.count_tokens(page1_content)
             
@@ -340,7 +340,7 @@ class DocumentChunker:
             
             current_tokens = self.count_tokens("\n".join(current_content_parts)) - overlap_tokens
             
-            # 4. 다음 페이지가 있으면 추가 시도 (window_size까지)
+            # 4. Attempt to add next page if any (up to window_size)
             next_page_idx = i + 1
             if next_page_idx < total_pages and len(included_pages) < self.window_size:
                 next_page = sorted_pages[next_page_idx]
@@ -350,13 +350,13 @@ class DocumentChunker:
                 combined_tokens = current_tokens + next_tokens
                 
                 if combined_tokens <= self.max_chunk_tokens:
-                    # 두 페이지 모두 들어감
+                    # Fit both pages
                     current_content_parts.append(next_content)
                     included_pages.append(next_page)
                     current_elements.extend(page_groups[next_page])
-                    i += 1  # 다음 페이지도 처리됨
+                    i += 1  # Next page is processed
                 else:
-                    # 두 번째 페이지를 문장 단위로 분할
+                    # Split the second page by sentences
                     available_tokens = self.max_chunk_tokens - current_tokens
                     
                     if available_tokens > 0:
@@ -383,21 +383,21 @@ class DocumentChunker:
                         if remaining_sentences:
                             carryover_text = " ".join(remaining_sentences)
                             carryover_page = next_page
-                            # 다음 반복에서 같은 페이지 인덱스 유지 (carryover 처리)
+                            # Keep the same page index in the next iteration (for carryover processing)
                         else:
-                            i += 1  # 다음 페이지 완전히 처리됨
+                            i += 1  # Next page completely processed
                     else:
-                        # 공간이 없으면 다음 페이지는 다음 청크로
+                        # If not enough space, push next page to next chunk
                         pass
             
-            # 5. 청크 생성
+            # 5. Generate chunk
             if current_content_parts:
                 combined_content = "\n".join(current_content_parts)
                 
-                # 메타데이터 병합
+                # Merge metadata
                 metadata = self.merge_metadata(current_elements, source, key, uploaded_at)
                 metadata["chunk_index"] = chunk_index
-                metadata["window_pages"] = list(set(included_pages))  # 중복 제거
+                metadata["window_pages"] = list(set(included_pages))  # Deduplicate
                 metadata["has_overlap"] = bool(prev_overlap_text)
                 
                 chunk = {
@@ -406,10 +406,10 @@ class DocumentChunker:
                 }
                 chunks.append(chunk)
                 
-                # 다음 청크를 위한 오버랩 텍스트 계산
-                # 현재 청크의 마지막 내용에서 추출 (오버랩 마커 제외)
+                # Calculate overlap text for the next chunk
+                # Extracted from the tail of the current chunk (excluding overlap marker)
                 last_content = current_content_parts[-1] if current_content_parts else ""
-                if last_content and not last_content.startswith("[이전 맥락]"):
+                if last_content and not last_content.startswith("[Previous Context]"):
                     prev_overlap_text = self.get_sentence_based_overlap(
                         last_content, 
                         self.overlap_tokens
@@ -417,7 +417,7 @@ class DocumentChunker:
                 
                 chunk_index += 1
             
-            # 6. 다음 페이지로 이동 (carryover가 없는 경우에만)
+            # 6. Move to next page (only if there are no carryovers)
             if not carryover_text:
                 i += 1
         
@@ -425,14 +425,14 @@ class DocumentChunker:
     
     def chunk_elements(self, elements: List[Dict[str, Any]], source: str, key: str = "", uploaded_at: str = "") -> List[Dict[str, Any]]:
         """
-        요소들을 청크로 분할합니다.
+        Split elements into chunks.
         
         Args:
-            elements: 요소 리스트 (content, metadata 포함)
-            source: 소스 파일명
+            elements: List of elements (including content, metadata)
+            source: Source filename
             
         Returns:
-            청크 리스트
+            Chunk list
         """
         chunks = []
         current_content = ""
@@ -446,13 +446,13 @@ class DocumentChunker:
             
             content = content.strip()
             
-            # 긴 텍스트는 먼저 분할
+            # Split long text first
             text_parts = self.split_long_text(content, self.max_chunk_tokens)
             
             for i, part in enumerate(text_parts):
                 part_tokens = self.count_tokens(part)
                 
-                # 오버랩 텍스트 포함하여 현재 청크 토큰 계산
+                # Calculate current chunk token including overlap text
                 if current_content:
                     test_content = current_content + "\n" + part
                 elif overlap_text:
@@ -462,9 +462,9 @@ class DocumentChunker:
                 
                 test_tokens = self.count_tokens(test_content)
                 
-                # max_chunk_tokens 초과 시 현재 청크 저장
+                # If exceeding max_chunk_tokens, save current chunk
                 if test_tokens > self.max_chunk_tokens and current_content:
-                    # 현재 청크 저장
+                    # Save current chunk
                     chunk_content = current_content
                     if overlap_text and not current_content.startswith(overlap_text):
                         chunk_content = overlap_text + "\n" + current_content if overlap_text else current_content
@@ -475,14 +475,14 @@ class DocumentChunker:
                     }
                     chunks.append(chunk)
                     
-                    # 오버랩 계산
+                    # Calculate overlap
                     overlap_text = self.get_overlap_text(current_content)
                     
-                    # 새 청크 시작
+                    # Start new chunk
                     current_content = part
                     current_elements = [elem] if i == 0 else []
                 else:
-                    # 현재 청크에 추가
+                    # Add to current chunk
                     if current_content:
                         current_content = current_content + "\n" + part
                     elif overlap_text:
@@ -490,10 +490,10 @@ class DocumentChunker:
                     else:
                         current_content = part
                     
-                    if i == 0:  # 첫 번째 파트일 때만 요소 추가
+                    if i == 0:  # Only add element on the first part
                         current_elements.append(elem)
         
-        # 마지막 청크 저장
+        # Save final chunk
         if current_content:
             chunk_content = current_content
             chunk = {
@@ -505,49 +505,49 @@ class DocumentChunker:
         return chunks
     
     def load_json(self, json_path: str) -> List[Dict[str, Any]]:
-        """JSON 파일을 로드합니다."""
+        """Load JSON file."""
         with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
     
     def save_chunks(self, chunks: List[Dict[str, Any]], output_path: str) -> None:
-        """청크를 JSON 파일로 저장합니다."""
+        """Save chunks as JSON file."""
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(chunks, f, ensure_ascii=False, indent=2)
     
     def process_file(self, json_path: str, output_dir: Optional[str] = None, uploaded_at: Optional[str] = None) -> str:
         """
-        JSON 파일을 청크로 분할합니다.
+        Split JSON file into chunks.
         
         Args:
-            json_path: 입력 JSON 파일 경로
-            output_dir: 출력 디렉토리 (None이면 입력 파일과 같은 디렉토리)
-            uploaded_at: 업로드 시각 (None이면 현재 시각 사용)
+            json_path: Input JSON file path
+            output_dir: Output directory (Same as input path if None)
+            uploaded_at: Upload timestamp (use current time if None)
             
         Returns:
-            출력 파일 경로
+            Output file path
         """
         json_path = Path(json_path)
         
         if not json_path.exists():
-            raise FileNotFoundError(f"파일을 찾을 수 없습니다: {json_path}")
+            raise FileNotFoundError(f"File not found: {json_path}")
         
         print(f"\n{'='*60}")
-        print(f"청킹 시작: {json_path.name}")
+        print(f"Starting chunking: {json_path.name}")
         print(f"{'='*60}")
         
-        # JSON 로드
+        # Load JSON
         elements = self.load_json(str(json_path))
-        print(f"  - 로드된 요소 수: {len(elements)}")
+        print(f"  - Loaded elements: {len(elements)}")
         
-        # 소스 파일명 추출
+        # Extract source filename
         if elements:
             source = elements[0].get("metadata", {}).get("source", json_path.stem)
-            # 경로에서 파일명만 추출
+            # Extract filename from path
             source = Path(source).name
         else:
             source = json_path.stem
         
-        # uploaded_at & key 생성
+        # Generate uploaded_at & key
         if not uploaded_at:
             uploaded_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
         timestamp_for_id = uploaded_at.replace("-", "").replace("T", "_").replace(":", "")
@@ -557,27 +557,27 @@ class DocumentChunker:
         print(f"  - key: {key}")
         print(f"  - uploaded_at: {uploaded_at}")
         
-        # 청킹 수행
+        # Execute chunking
         if self.use_sliding_window:
-            print(f"  - 청킹 방식: 슬라이딩 윈도우 (윈도우 크기: {self.window_size}, 오버랩: {self.overlap_pages} 페이지)")
+            print(f"  - Chunking method: Sliding window (Window size: {self.window_size}, Overlap: {self.overlap_pages}  pages)")
             chunks = self.chunk_elements_sliding_window(elements, source, key, uploaded_at)
         else:
-            print(f"  - 청킹 방식: 토큰 기반 (최소: {self.min_chunk_tokens}, 최대: {self.max_chunk_tokens}, 오버랩: {self.overlap_tokens} 토큰)")
+            print(f"  - Chunking method: Token based (Min: {self.min_chunk_tokens}, Max: {self.max_chunk_tokens}, Overlap: {self.overlap_tokens}  tokens)")
             chunks = self.chunk_elements(elements, source, key, uploaded_at)
-        print(f"  - 생성된 청크 수: {len(chunks)}")
+        print(f"  - Generated chunks: {len(chunks)}")
         
-        # 청크별 통계
+        # Stats per chunk
         total_tokens = 0
         for i, chunk in enumerate(chunks):
             tokens = self.count_tokens(chunk["content"])
             total_tokens += tokens
             window_pages = chunk['metadata'].get('window_pages', chunk['metadata'].get('page', []))
-            print(f"    - 청크 {i+1}: {tokens} 토큰, 페이지 {window_pages}")
+            print(f"    - Chunk {i+1}: {tokens} tokens, pages {window_pages}")
         
-        print(f"  - 총 토큰 수: {total_tokens}")
-        print(f"  - 평균 청크 토큰: {total_tokens // len(chunks) if chunks else 0}")
+        print(f"  - Total tokens: {total_tokens}")
+        print(f"  - Average chunk tokens: {total_tokens // len(chunks) if chunks else 0}")
         
-        # 출력 경로 설정
+        # Output path setting
         if output_dir:
             output_dir = Path(output_dir)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -587,79 +587,79 @@ class DocumentChunker:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         output_file = output_dir / f"{json_path.stem}_chunked_{timestamp}.json"
         
-        # 저장
+        # Save
         self.save_chunks(chunks, str(output_file))
-        print(f"  - 출력 파일: {output_file}")
+        print(f"  - Output file: {output_file}")
         
         return str(output_file)
 
 
 def main():
-    """CLI 진입점"""
+    """CLI Entry Point"""
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="JSON 파일의 요소들을 RAG용 청크로 분할합니다.",
+        description="Split JSON file elements into chunks for RAG.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-예시:
-  # 단일 JSON 파일 청킹 (기본: 슬라이딩 윈도우 방식)
+Example:
+  # Chunk single JSON file (Default: Sliding window method)
   python chunking_main.py output/lec6_graph_20260122_215338.json
   
-  # 슬라이딩 윈도우 크기 변경 (3페이지씩 묶기, 1페이지 오버랩)
+  # Change sliding window size (group by 3 pages, overlap 1 page)
   python chunking_main.py input.json --window-size 3 --overlap-pages 1
   
-  # 토큰 기반 청킹 사용
+  # Use token-based chunking
   python chunking_main.py input.json --token-based --min-tokens 500 --max-tokens 800
   
-  # 출력 디렉토리 지정
+  # Specify output directory
   python chunking_main.py input.json -o chunks/
 """
     )
     
     parser.add_argument(
         "input",
-        help="입력 JSON 파일 경로"
+        help="Input JSON file path"
     )
     parser.add_argument(
         "-o", "--output",
         default=None,
-        help="출력 디렉토리 (기본값: 입력 파일과 같은 디렉토리)"
+        help="Output directory (default: same directory as input file)"
     )
     parser.add_argument(
         "--min-tokens",
         type=int,
         default=800,
-        help="최소 청크 토큰 수 (기본값: 800)"
+        help="Minimum chunk token count (default: 800)"
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
         default=1000,
-        help="최대 청크 토큰 수 (기본값: 1000)"
+        help="Maximum chunk token count (default: 1000)"
     )
     parser.add_argument(
         "--overlap",
         type=int,
         default=150,
-        help="오버랩 토큰 수 - 토큰 기반 청킹에서 사용 (기본값: 150)"
+        help="Overlap token count - used in token-based chunking (default: 150)"
     )
     parser.add_argument(
         "--token-based",
         action="store_true",
-        help="토큰 기반 청킹 사용 (기본값: 슬라이딩 윈도우 방식 사용)"
+        help="Use token-based chunking (default: use sliding window method)"
     )
     parser.add_argument(
         "--window-size",
         type=int,
         default=1,
-        help="슬라이딩 윈도우 크기 - 묶을 페이지 수 (기본값: 1)"
+        help="Sliding window size - number of pages to group (default: 1)"
     )
     parser.add_argument(
         "--overlap-pages",
         type=int,
         default=1,
-        help="오버랩 페이지 수 (기본값: 1)"
+        help="Overlap page count (default: 1)"
     )
     
     args = parser.parse_args()
@@ -675,9 +675,9 @@ def main():
     
     try:
         output_path = chunker.process_file(args.input, args.output)
-        print(f"\n완료! 출력 파일: {output_path}")
+        print(f"\nDone! Output file: {output_path}")
     except Exception as e:
-        print(f"\n오류 발생: {e}")
+        print(f"\nError occurred: {e}")
         sys.exit(1)
 
 

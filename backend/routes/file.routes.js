@@ -9,7 +9,7 @@ const fileController = require("../controllers/file.controller");
  * /api/files:
  *   post:
  *     tags: [Files]
- *     summary: 파일 메타데이터 기록 생성
+ *     summary: Create file metadata record
  *     requestBody:
  *       required: true
  *       content:
@@ -25,7 +25,7 @@ const fileController = require("../controllers/file.controller");
  *                 type: string
  *     responses:
  *       201:
- *         description: 파일 기록 생성 성공
+ *         description: File record created successfully
  */
 router.post("/", fileController.createFileRecord);
 

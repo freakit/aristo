@@ -797,7 +797,7 @@ async def _handle_tool_calls(
             point = fc.args.get("point", "")
             result_text = await execute_add_missing_point(session_id, point)
 
-            # 프론트엔드에 Missing 목록 변경 알림
+            # Notify frontend of Missing list change
             session = live_sessions.get(session_id)
             if session:
                 await websocket.send_json({
@@ -813,7 +813,7 @@ async def _handle_tool_calls(
             how_resolved = fc.args.get("how_resolved", "")
             result_text = execute_mark_completed(session_id, point, how_resolved)
 
-            # 프론트엔드에 Completed 목록 변경 알림
+            # Notify frontend of Completed list change
             session = live_sessions.get(session_id)
             if session:
                 await websocket.send_json({
@@ -824,24 +824,24 @@ async def _handle_tool_calls(
                     },
                 })
 
-                # 모든 학습 목표 달성 시 → Gemini가 마무리 멘트 후 세션 종료
+                # When all goals achieved → Gemini wraps up and ends session
                 if not session.get("missing_points"):
-                    print(f"[{session_id}] 🎉 모든 학습 목표 달성 — 세션 종료 예약")
+                    print(f"[{session_id}] 🎉 All learning goals achieved — scheduling session end")
                     try:
                         await gemini_session.send_client_content(
                             turns={"parts": [{"text": (
-                                "모든 학습 목표가 완료되었습니다. "
-                                "학생에게 '모든 내용을 학습하셨네요! 오늘 수고하셨습니다.' 라고 "
-                                "따뜻하게 마무리 인사를 해주세요. 그 이상의 질문은 하지 마세요."
+                                "All learning goals have been completed. "
+                                "Please warmly wrap up the session saying 'You've learned everything! Great job today.' "
+                                "Do not ask any more questions."
                             )}]},
                             turn_complete=True,
                         )
                     except Exception as e:
-                        print(f"[{session_id}] [Warning] 마무리 멘트 주입 실패: {e}")
+                        print(f"[{session_id}] [Warning] Failed to inject wrap-up instruction: {e}")
                     session["active"] = False
 
         else:
-            result_text = f"알 수 없는 도구: {fc.name}"
+            result_text = f"Unknown tool: {fc.name}"
 
         function_responses.append(types.FunctionResponse(
             id=fc.id,
@@ -856,20 +856,20 @@ async def _handle_tool_calls(
         })
 
     await gemini_session.send_tool_response(function_responses=function_responses)
-    print(f"[{session_id}] [OK] Tool Response 전송 완료 ({len(function_responses)}개)")
+    print(f"[{session_id}] [OK] Tool Response sent ({len(function_responses)} items)")
 
 
 def _tool_start_message(tool_name: str) -> str:
     return {
-        "search_db":         "학습 자료 검색 중...",
-        "add_missing_point": "누락 포인트 기록 중...",
-        "mark_completed":    "완료 항목 처리 중...",
-    }.get(tool_name, f"도구 실행 중: {tool_name}")
+        "search_db":         "Searching learning materials...",
+        "add_missing_point": "Recording missing points...",
+        "mark_completed":    "Processing completed items...",
+    }.get(tool_name, f"Running tool: {tool_name}")
 
 
 def _tool_end_message(tool_name: str) -> str:
     return {
-        "search_db":         "검색 완료. 응답 생성 중...",
-        "add_missing_point": "Missing.md 업데이트됨.",
-        "mark_completed":    "Completed.md 업데이트됨.",
-    }.get(tool_name, f"도구 완료: {tool_name}")
+        "search_db":         "Search complete. Generating response...",
+        "add_missing_point": "Missing.md updated.",
+        "mark_completed":    "Completed.md updated.",
+    }.get(tool_name, f"Tool complete: {tool_name}")

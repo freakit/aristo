@@ -9,8 +9,8 @@ const aiProxyController = require("../controllers/ai-proxy.controller");
  * /api/ai-proxy/ask:
  *   post:
  *     tags: [AI Proxy]
- *     summary: AI에게 메시지 전송
- *     description: 시험 세션 내에서 AI와 대화. START_SESSION, END_SESSION, CONTINUE_SESSION 등 특수 메시지 지원.
+ *     summary: Send message to AI
+ *     description: Chat with AI within an exam session. Supports special messages like START_SESSION, END_SESSION, CONTINUE_SESSION.
  *     requestBody:
  *       required: true
  *       content:
@@ -21,22 +21,22 @@ const aiProxyController = require("../controllers/ai-proxy.controller");
  *             properties:
  *               sessionId:
  *                 type: string
- *                 description: 시험 세션 ID
+ *                 description: Exam session ID
  *               userInput:
  *                 type: string
- *                 description: 사용자 입력 또는 START_SESSION/END_SESSION/CONTINUE_SESSION
+ *                 description: User input or START_SESSION/END_SESSION/CONTINUE_SESSION
  *               studentInfo:
  *                 type: object
- *                 description: 학생 정보 (세션 시작 시)
+ *                 description: Student info (at session start)
  *               examInfo:
  *                 type: object
- *                 description: 시험 정보 (세션 시작 시)
+ *                 description: Exam info (at session start)
  *               attachments:
  *                 type: array
- *                 description: 첨부파일 (세션 시작 시)
+ *                 description: Attachments (at session start)
  *     responses:
  *       200:
- *         description: AI 응답
+ *         description: AI response
  */
 router.post("/ask", aiProxyController.ask);
 
@@ -45,7 +45,7 @@ router.post("/ask", aiProxyController.ask);
  * /api/ai-proxy/disconnect:
  *   post:
  *     tags: [AI Proxy]
- *     summary: AI 세션 연결 해제
+ *     summary: Disconnect AI session
  *     requestBody:
  *       required: true
  *       content:

@@ -1,7 +1,7 @@
 """
-Gemini Live Q&A WebSocket 테스트 스크립트
-- 서버가 실행 중이어야 합니다 (python main.py)
-- 텍스트 입력으로 Gemini Live 음성 응답 테스트
+Gemini Live Q&A WebSocket test script
+- Server must be running (python main.py)
+- Test Gemini Live voice response with text input
 """
 
 import asyncio
@@ -14,21 +14,21 @@ import os
 SERVER_URL = "http://localhost:8000"
 WS_URL = "ws://localhost:8000"
 
-# 받은 오디오를 저장할 파일 (24kHz 16-bit mono PCM)
+# File to save received audio (24kHz 16-bit mono PCM)
 OUTPUT_WAV = "test_output.wav"
 
 
 async def create_session() -> str:
-    """1. REST API로 세션 생성"""
+    """1. Create session with REST API"""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{SERVER_URL}/api/live-question/session",
             json={
-                "student_info": {"name": "테스트학생", "id": "T001"},
+                "student_info": {"name": "TestStudent", "id": "T001"},
                 "exam_info": {
-                    "name": "자료구조 테스트",
-                    "content": "스택(Stack)의 개념과 활용에 관한 평가입니다.",
-                    "first_question": "스택(Stack)이 무엇인지 설명해보세요. 특징과 실제 사용 예시도 함께 말해주세요.",
+                    "name": "Data Structure Test",
+                    "content": "Evaluation of Stack concepts and applications.",
+                    "first_question": "Please explain what a Stack is. Also mention its characteristics and real-world examples.",
                 },
                 "rag_keys": None,
             },
@@ -36,71 +36,71 @@ async def create_session() -> str:
         resp.raise_for_status()
         data = resp.json()
         session_id = data["session_id"]
-        print(f"[OK] 세션 생성됨: {session_id}")
+        print(f"[OK] Session created: {session_id}")
         return session_id
 
 
 async def run_ws_test(session_id: str):
-    """2. WebSocket 연결 후 텍스트 전송 → 오디오 응답 수신"""
+    """2. Connect WebSocket -> Send text -> Receive audio response"""
     uri = f"{WS_URL}/api/live-question/ws/{session_id}"
 
     audio_chunks = []
 
-    print(f"[Connect] WebSocket 연결 중: {uri}")
+    print(f"[Connect] Connecting to WebSocket: {uri}")
     async with websockets.connect(uri) as ws:
 
-        # ── ready 메시지 대기 ──
+        # -- Wait for ready message --
         raw = await asyncio.wait_for(ws.recv(), timeout=15)
         msg = json.loads(raw)
-        print(f"📨 서버: {msg}")
+        print(f"📨 Server: {msg}")
 
         if msg.get("type") != "ready":
-            print("[Error] ready 메시지를 받지 못했습니다.")
+            print("[Error] Did not receive ready message.")
             return
 
-        # ── 텍스트 입력 전송 ──
-        text_input = "안녕하세요. 스택은 LIFO 구조입니다. 맞나요?"
-        print(f"\n📤 텍스트 전송: {text_input}")
+        # -- Send text input --
+        text_input = "Hello. A stack is LIFO. Is that right?"
+        print(f"\n📤 Sent text: {text_input}")
         await ws.send(json.dumps({"type": "text", "content": text_input}))
 
-        # ── 응답 수신 루프 ──
-        print("\n🎧 응답 대기 중... (15초 타임아웃)")
+        # -- Response receive loop --
+        print("\n🎧 Waiting for response... (15s timeout)")
         turn_done = False
         while not turn_done:
             try:
                 raw = await asyncio.wait_for(ws.recv(), timeout=15)
 
-                # 바이너리 = 오디오 PCM
+                # Binary = Audio PCM
                 if isinstance(raw, bytes):
                     audio_chunks.append(raw)
-                    print(f"   🔊 오디오 수신: {len(raw)} bytes (누적 {sum(len(c) for c in audio_chunks)} bytes)")
+                    print(f"   🔊 Received audio: {len(raw)} bytes (total {sum(len(c) for c in audio_chunks)} bytes)")
 
-                # JSON = 제어 메시지
+                # JSON = Control message
                 else:
                     msg = json.loads(raw)
                     msg_type = msg.get("type", "")
                     print(f"   📨 {msg_type}: {msg.get('message', '')}")
 
                     if msg_type == "turn_complete":
-                        print("\n[OK] Gemini 응답 완료!")
+                        print("\n[OK] Gemini response complete!")
                         turn_done = True
 
                     elif msg_type == "error":
-                        print(f"\n[Error] 에러: {msg.get('message')}")
+                        print(f"\n[Error] Error: {msg.get('message')}")
                         turn_done = True
 
                     elif msg_type in ("tool_call_start", "tool_call_end"):
-                        pass  # RAG 검색 상태 메시지
+                        pass  # RAG search status message
 
             except asyncio.TimeoutError:
-                print("\n⏱️ 타임아웃 (15초 내 응답 없음)")
+                print("\n⏱️ Timeout (no response within 15s)")
                 break
 
-        # ── 세션 종료 ──
+        # -- End session --
         await ws.send(json.dumps({"type": "end"}))
-        print("👋 세션 종료 전송")
+        print("👋 Sent session end")
 
-    # ── 오디오 저장 ──
+    # -- Save audio --
     if audio_chunks:
         total_audio = b"".join(audio_chunks)
         with wave.open(OUTPUT_WAV, "wb") as wf:
@@ -108,34 +108,34 @@ async def run_ws_test(session_id: str):
             wf.setsampwidth(2)          # 16-bit
             wf.setframerate(24000)      # 24kHz
             wf.writeframes(total_audio)
-        print(f"\n💾 오디오 저장됨: {OUTPUT_WAV} ({len(total_audio)} bytes, {len(total_audio)/48000:.1f}초)")
-        print(f"   → 파일을 열어서 재생해 보세요!")
+        print(f"\n💾 Audio saved: {OUTPUT_WAV} ({len(total_audio)} bytes, {len(total_audio)/48000:.1f}s)")
+        print(f"   -> Open the file to play!")
     else:
-        print("\n[Warning] 수신된 오디오 없음")
+        print("\n[Warning] No audio received")
 
 
 async def main():
     print("=" * 50)
-    print("🎙️ Gemini Live Q&A WebSocket 테스트")
+    print("🎙️ Gemini Live Q&A WebSocket Test")
     print("=" * 50)
 
-    # 서버 healthcheck
+    # Server healthcheck
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(f"{SERVER_URL}/api/health", timeout=3)
-            print(f"🟢 서버 상태: {resp.json()['status']}\n")
+            print(f"🟢 Server status: {resp.json()['status']}\n")
     except Exception:
-        print("❌ 서버에 연결할 수 없습니다. 먼저 'python main.py'로 서버를 시작하세요.")
+        print("❌ Cannot connect to server. Start server with 'python main.py' first.")
         return
 
-    # 세션 생성
+    # Create session
     session_id = await create_session()
 
-    # WebSocket 테스트
+    # WebSocket test
     await run_ws_test(session_id)
 
     print("\n" + "=" * 50)
-    print("테스트 완료!")
+    print("Test complete!")
 
 
 if __name__ == "__main__":

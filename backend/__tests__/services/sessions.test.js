@@ -1,5 +1,5 @@
 // __tests__/services/sessions.test.js
-// sessions.service 단위 테스트
+// sessions.service unit tests
 
 jest.mock("../../repositories/sessions.repository", () => ({
   createSession: jest.fn(),
@@ -20,7 +20,7 @@ const SESSION_ID = "sess1";
 const fakeSession = {
   sessionId: SESSION_ID,
   uid: OWNER_UID,
-  title: "운영체제 공부",
+  title: "Operating Systems Study",
   status: "active",
 };
 
@@ -28,18 +28,18 @@ describe("SessionsService", () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe("createSession", () => {
-    it("세션을 생성하고 반환한다", async () => {
+    it("creates and returns a session", async () => {
       sessionsRepository.createSession.mockResolvedValue(fakeSession);
 
       const result = await sessionsService.createSession({
         uid: OWNER_UID,
-        title: "운영체제 공부",
+        title: "Operating Systems Study",
         vectorDocIds: ["doc1"],
       });
 
       expect(sessionsRepository.createSession).toHaveBeenCalledWith({
         uid: OWNER_UID,
-        title: "운영체제 공부",
+        title: "Operating Systems Study",
         vectorDocIds: ["doc1"],
       });
       expect(result).toEqual(fakeSession);
@@ -47,7 +47,7 @@ describe("SessionsService", () => {
   });
 
   describe("getSession", () => {
-    it("세션이 없으면 statusCode 404 throw", async () => {
+    it("throws statusCode 404 if session not found", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(null);
 
       await expect(
@@ -57,7 +57,7 @@ describe("SessionsService", () => {
       });
     });
 
-    it("다른 유저 uid면 statusCode 403 throw", async () => {
+    it("throws statusCode 403 if different user uid", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
 
       await expect(
@@ -67,8 +67,8 @@ describe("SessionsService", () => {
       });
     });
 
-    it("정상 요청이면 세션 + 메시지 반환", async () => {
-      const messages = [{ msgId: "m1", role: "user", content: "안녕" }];
+    it("returns session + messages on valid request", async () => {
+      const messages = [{ msgId: "m1", role: "user", content: "Hello" }];
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
       sessionsRepository.getMessages.mockResolvedValue(messages);
 
@@ -79,7 +79,7 @@ describe("SessionsService", () => {
   });
 
   describe("endSession", () => {
-    it("세션이 없으면 statusCode 404 throw", async () => {
+    it("throws statusCode 404 if session not found", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(null);
 
       await expect(
@@ -89,7 +89,7 @@ describe("SessionsService", () => {
       });
     });
 
-    it("권한 없으면 statusCode 403 throw", async () => {
+    it("throws statusCode 403 if no permission", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
 
       await expect(
@@ -99,7 +99,7 @@ describe("SessionsService", () => {
       });
     });
 
-    it("정상 요청이면 세션을 종료하고 반환", async () => {
+    it("ends and returns session on valid request", async () => {
       const ended = { ...fakeSession, status: "ended" };
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
       sessionsRepository.endSession.mockResolvedValue(ended);
@@ -110,7 +110,7 @@ describe("SessionsService", () => {
   });
 
   describe("deleteSession", () => {
-    it("권한 없으면 statusCode 403 throw", async () => {
+    it("throws statusCode 403 if no permission", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
 
       await expect(
@@ -120,7 +120,7 @@ describe("SessionsService", () => {
       });
     });
 
-    it("정상 요청이면 세션 삭제", async () => {
+    it("deletes session on valid request", async () => {
       sessionsRepository.getSessionById.mockResolvedValue(fakeSession);
       sessionsRepository.deleteSession.mockResolvedValue();
 

@@ -4,22 +4,22 @@ const router = express.Router();
 const sessionsController = require("../controllers/sessions.controller");
 const { verifyFirebaseToken } = require("../middleware/auth.middleware");
 
-// 모든 sessions 라우트는 Firebase 인증 필요
+// All sessions routes require Firebase authentication
 router.use(verifyFirebaseToken);
 
-// POST /api/sessions — 새 세션 생성
+// POST /api/sessions — Create new session
 router.post("/", sessionsController.createSession);
 
-// GET /api/sessions — 내 세션 목록
+// GET /api/sessions — Get my session list
 router.get("/", sessionsController.getSessions);
 
-// GET /api/sessions/:sessionId — 세션 + 메시지 조회
+// GET /api/sessions/:sessionId — Get session + messages
 router.get("/:sessionId", sessionsController.getSession);
 
-// PATCH /api/sessions/:sessionId/end — 세션 종료
+// PATCH /api/sessions/:sessionId/end — End session
 router.patch("/:sessionId/end", sessionsController.endSession);
 
-// DELETE /api/sessions/:sessionId — 세션 삭제
+// DELETE /api/sessions/:sessionId — Delete session
 router.delete("/:sessionId", sessionsController.deleteSession);
 
 module.exports = router;

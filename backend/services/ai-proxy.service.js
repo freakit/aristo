@@ -1,5 +1,5 @@
 // backend/services/ai-proxy.service.js
-// Facade - 기존 API 호환성 유지
+// facade - maintain legacy API compatibility
 
 const AIProxyService = require("./ai-proxy/proxy.service");
 

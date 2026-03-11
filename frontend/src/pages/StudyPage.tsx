@@ -362,7 +362,7 @@ export const StudyPage: React.FC = () => {
   const [tutorSessionId, setTutorSessionId] = useState<string | null>(null)
   const [summaryData, setSummaryData] = useState<any | null>(null)
   const [error, setError] = useState('')
-  // 라이브 누적 트랜스크립트 버퍼 (닫힌는 stale closures 방지를 위해 ref 사용)
+  // Live cumulative transcript buffer (using ref to prevent stale closures)
   const liveAiBufferRef = useRef('')
   const liveUserBufferRef = useRef('')
   const [liveAiDisplay, setLiveAiDisplay] = useState('')
@@ -524,7 +524,7 @@ export const StudyPage: React.FC = () => {
               setMissingPoints(msg.data.missing_points || [])
               setCompletedPoints(msg.data.completed_points || [])
             } else if (msg.type === 'turn_complete') {
-              // AI 턴 종료 — 누적된 AI 텍스트를 채팅 메세지로 확정
+              // AI turn complete — commit accumulated AI text as chat message
               if (liveAiBufferRef.current.trim()) {
                 const committed = liveAiBufferRef.current.trim()
                 addMsg({ role: 'assistant', content: committed, kind: 'explain' })
@@ -534,11 +534,11 @@ export const StudyPage: React.FC = () => {
               }
               setPhase('questioning')
             } else if (msg.type === 'input_transcript') {
-              // 사용자 음성 누적
+              // Accumulate user speech
               liveUserBufferRef.current += (liveUserBufferRef.current ? ' ' : '') + msg.text
               setLiveUserDisplay(liveUserBufferRef.current)
 
-              // 학생 발화 시작 시 재생 중인 오디오 즉시 자르기
+              // Immediately stop playing audio when student starts speaking
               activeSourcesRef.current.forEach(src => {
                 try { src.stop() } catch (e) {}
               })
@@ -547,7 +547,7 @@ export const StudyPage: React.FC = () => {
                 nextTimeRef.current = audioContextRef.current.currentTime
               }
             } else if (msg.type === 'interrupted') {
-              // AI 모델생성 중단됨
+              // AI model generation interrupted
               activeSourcesRef.current.forEach(src => {
                 try { src.stop() } catch (e) {}
               })
@@ -556,7 +556,7 @@ export const StudyPage: React.FC = () => {
                 nextTimeRef.current = audioContextRef.current.currentTime
               }
             } else if (msg.type === 'output_transcript') {
-              // AI 음성 누적 — AI가 말하기 시작하면 사용자 발화를 먼저 커밋
+              // Accumulate AI speech — commit user speech first when AI starts speaking
               if (liveUserBufferRef.current.trim()) {
                 addMsg({ role: 'user', content: liveUserBufferRef.current.trim() })
                 liveUserBufferRef.current = ''
@@ -696,7 +696,7 @@ export const StudyPage: React.FC = () => {
     await fetchSessions()
   }
 
-  // ------- Render: 세션 목록 -------
+  // ------- Render: Session List -------
   if (!selectedSession) {
     return (
       <>
@@ -736,7 +736,7 @@ export const StudyPage: React.FC = () => {
     )
   }
 
-  // ------- Render: 튜터 세션 -------
+  // ------- Render: Tutor Session -------
   const isInputDisabled = phase === 'thinking' || phase === 'explaining' || phase === 'complete' || phase === 'summary'
   const isMicDisabled = isInputDisabled || sttLoading
 
@@ -846,7 +846,7 @@ export const StudyPage: React.FC = () => {
               </Card>
             ) : (
               <>
-                {/* 채팅 */}
+                {/* Chat */}
                 <Card>
                   <CardHeader>
                     <CardTitle style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -876,7 +876,7 @@ export const StudyPage: React.FC = () => {
                   </ChatWindow>
                 </Card>
 
-                {/* 실시간 누적 자막 */}
+                {/* Live cumulative subtitles */}
                 {(liveAiDisplay || liveUserDisplay) && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {liveAiDisplay && (
@@ -906,7 +906,7 @@ export const StudyPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* 요약 카드 */}
+                {/* Summary card */}
                 {phase === 'summary' && summaryData && (
                   <SummaryCard>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -917,7 +917,7 @@ export const StudyPage: React.FC = () => {
                     </div>
                     {summaryData.duration_seconds && (
                       <p style={{ fontSize: 13, color: theme.colors.textSecondary, marginBottom: 10 }}>
-                        Duration: {Math.round(summaryData.duration_seconds)}초
+                        Duration: {Math.round(summaryData.duration_seconds)}s
                       </p>
                     )}
                     {summaryData.completed_points?.length > 0 && (
@@ -946,7 +946,7 @@ export const StudyPage: React.FC = () => {
                   </SummaryCard>
                 )}
 
-                {/* 입력 영역 */}
+                {/* Input area */}
                 {(phase === 'questioning' || phase === 'thinking') && (
                   <InputArea>
                     <MicBtn

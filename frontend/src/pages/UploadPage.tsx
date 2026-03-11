@@ -311,7 +311,7 @@ export const UploadPage: React.FC = () => {
                   addLog({ type: 'progress', text: msg.message ?? data, ts: now() })
                 }
               } catch {
-                // 단순 텍스트 메시지
+                // plain text message
                 addLog({ type: 'progress', text: data, ts: now() })
               }
             },

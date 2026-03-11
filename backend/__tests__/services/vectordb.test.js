@@ -1,5 +1,5 @@
 // __tests__/services/vectordb.test.js
-// vectordb.repository 단위 테스트 (Firestore mock)
+// vectordb.repository unit tests (Firestore mock)
 
 const mockDocRef = { id: "vec-doc-id", set: jest.fn().mockResolvedValue() };
 const mockBatch = {
@@ -25,10 +25,10 @@ describe("VectorDbRepository", () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe("createVector", () => {
-    it("Firestore에 벡터 문서를 생성하고 docId를 반환한다", async () => {
+    it("creates a vector document in Firestore and returns docId", async () => {
       const result = await vectordbRepo.createVector({
         uid: "uid1",
-        source: "강의자료.pdf",
+        source: "lecture-materials.pdf",
         key: "rag-key-001",
         uploaded_at: "2026-02-25T00:00:00Z",
       });
@@ -36,7 +36,7 @@ describe("VectorDbRepository", () => {
       expect(mockDocRef.set).toHaveBeenCalledWith(
         expect.objectContaining({
           uid: "uid1",
-          source: "강의자료.pdf",
+          source: "lecture-materials.pdf",
           key: "rag-key-001",
         }),
       );
@@ -45,7 +45,7 @@ describe("VectorDbRepository", () => {
   });
 
   describe("getVectorsByUid", () => {
-    it("uid로 필터된 벡터 목록을 반환한다", async () => {
+    it("returns vector list filtered by uid", async () => {
       const fakeRows = [
         { id: "d1", data: () => ({ uid: "uid1", source: "a.pdf", key: "k1" }) },
         { id: "d2", data: () => ({ uid: "uid1", source: "b.pdf", key: "k2" }) },
@@ -60,7 +60,7 @@ describe("VectorDbRepository", () => {
   });
 
   describe("deleteVectorByKey", () => {
-    it("key에 해당하는 문서를 배치 삭제한다", async () => {
+    it("batch deletes documents matching the key", async () => {
       const fakeSnap = {
         docs: [{ ref: "ref1" }, { ref: "ref2" }],
         size: 2,
@@ -76,7 +76,7 @@ describe("VectorDbRepository", () => {
   });
 
   describe("getKeysByDocIds", () => {
-    it("docId 목록에서 key 목록을 추출한다", async () => {
+    it("extracts key list from docId list", async () => {
       mockDocRef.get = jest
         .fn()
         .mockResolvedValueOnce({ exists: true, data: () => ({ key: "k1" }) })
@@ -87,7 +87,7 @@ describe("VectorDbRepository", () => {
       expect(keys).toEqual(["k1", "k2"]);
     });
 
-    it("존재하지 않는 docId는 key 목록에서 제외한다", async () => {
+    it("excludes non-existent docIds from key list", async () => {
       mockDocRef.get = jest
         .fn()
         .mockResolvedValueOnce({ exists: true, data: () => ({ key: "k1" }) })
@@ -97,7 +97,7 @@ describe("VectorDbRepository", () => {
       expect(keys).toEqual(["k1"]);
     });
 
-    it("빈 배열 입력이면 빈 배열 반환", async () => {
+    it("returns empty array for empty array input", async () => {
       const keys = await vectordbRepo.getKeysByDocIds([]);
       expect(keys).toEqual([]);
     });

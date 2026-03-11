@@ -53,7 +53,7 @@ module.exports = {
       const { docId } = req.params;
       if (!docId) return res.status(400).json({ error: "docId is required" });
       await ragService.deleteSource(docId, req.uid);
-      res.json({ message: "삭제 완료" });
+      res.json({ message: "Deleted successfully" });
     } catch (error) {
       logger.error({ err: error }, "RAG Delete Source Error");
       res

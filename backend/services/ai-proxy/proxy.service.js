@@ -37,7 +37,7 @@ class AIProxyService {
     setInterval(
       () => {
         const now = Date.now();
-        const TIMEOUT = 1000 * 60 * 30; // 30분 비활성
+        const TIMEOUT = 1000 * 60 * 30; // 30 minutes of inactivity
 
         for (const [sessionId, manager] of this.sessionConnections.entries()) {
           if (now - manager.lastActivity > TIMEOUT) {
@@ -48,7 +48,7 @@ class AIProxyService {
         }
       },
       1000 * 60 * 5,
-    ); // 5분마다 체크
+    ); // Check every 5 minutes
   }
 }
 

@@ -2,14 +2,14 @@
 const { db } = require("../config/firebase");
 
 class UsersRepository {
-  // uid로 유저 문서 조회
+  // Get user document by uid
   async getUser(uid) {
     const snap = await db.collection("users").doc(uid).get();
     if (!snap.exists) return null;
     return snap.data();
   }
 
-  // 유저 문서 생성
+  // Create user document
   async createUser(uid, profile) {
     await db.collection("users").doc(uid).set(profile);
     return profile;

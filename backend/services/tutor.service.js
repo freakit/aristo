@@ -1,5 +1,5 @@
 // backend/services/tutor.service.js
-// Python FastAPI /api/tutor/* 를 Node.js 백엔드에서 프록시하는 서비스
+// Service that proxies Python FastAPI /api/tutor/* from Node.js backend
 const axios = require("axios");
 const logger = require("../config/logger");
 
@@ -7,10 +7,10 @@ const PYTHON_API_URL = process.env.AI_SERVER_URL || "http://localhost:8000";
 
 class TutorService {
   /**
-   * 튜터 세션 시작
+   * Start tutor session
    * Python: POST /api/tutor/start
-   * @param {string} topic - 학습 주제
-   * @param {string[]|null} ragKeys - RAG 벡터 키 목록
+   * @param {string} topic - Learning topic
+   * @param {string[]|null} ragKeys - RAG vector key list
    */
   async startSession({ topic, ragKeys = null }) {
     const response = await axios.post(`${PYTHON_API_URL}/api/tutor/start`, {
@@ -22,10 +22,10 @@ class TutorService {
   }
 
   /**
-   * 학생 답변 제출
+   * Submit student answer
    * Python: POST /api/tutor/reply
-   * @param {string} sessionId - Python 서버 세션 ID
-   * @param {string} answer - 학생 답변
+   * @param {string} sessionId - Python server session ID
+   * @param {string} answer - Student answer
    */
   async submitReply({ sessionId, answer }) {
     const response = await axios.post(`${PYTHON_API_URL}/api/tutor/reply`, {
@@ -36,7 +36,7 @@ class TutorService {
   }
 
   /**
-   * 세션 종료 + 학습 요약
+   * End session + learning summary
    * Python: POST /api/tutor/end
    * @param {string} sessionId
    */
@@ -49,7 +49,7 @@ class TutorService {
   }
 
   /**
-   * 세션 상태 조회
+   * Get session status
    * Python: GET /api/tutor/session/:id
    */
   async getSession(sessionId) {

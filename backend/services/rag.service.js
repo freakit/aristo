@@ -7,7 +7,7 @@ const vectordbRepository = require("../repositories/vectordb.repository");
 const PYTHON_API_URL = process.env.AI_SERVER_URL || "http://localhost:8000";
 
 class RagService {
-  // PDF 업로드 → Python 서버 전달 → Firestore 메타데이터 저장
+  // Upload PDF → forward to Python server → save Firestore metadata
   async uploadPdf({ uid, file, options = {} }) {
     const formData = new FormData();
     formData.append("file", file.buffer, {
@@ -44,7 +44,7 @@ class RagService {
     return { ...response.data, docId: savedDoc?.docId };
   }
 
-  // SSE 로그 스트리밍 — res에 직접 pipe하는 특성상 서비스에서 처리
+  // SSE log streaming — handled in service due to direct pipe to res
   async streamLogs(key, req, res) {
     const response = await axios({
       method: "get",
@@ -63,7 +63,7 @@ class RagService {
     req.on("close", () => response.data.destroy());
   }
 
-  // 소스 목록 조회 + chunk count 병렬 조회
+  // Get source list + parallel chunk count query
   async getSources(uid) {
     const rows = await vectordbRepository.getVectorsByUid(uid);
     return Promise.all(
@@ -81,7 +81,7 @@ class RagService {
     );
   }
 
-  // 소스 삭제 — 권한 확인 + Python 삭제 + Firestore 삭제
+  // Delete source — verify permission + delete in Python + delete in Firestore
   async deleteSource(docId, uid) {
     const snap = await vectordbRepository.getVectorDocById(docId);
     if (!snap) {

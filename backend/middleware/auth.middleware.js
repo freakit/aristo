@@ -4,21 +4,21 @@ const { auth } = require("../config/firebase");
 const IS_DEV = process.env.NODE_ENV !== "production";
 
 /**
- * Firebase ID Token 검증 미들웨어
- * - 프로덕션: Authorization: Bearer <idToken> 헤더 필수
- * - 개발 환경: 토큰이 없거나 잘못되어도 uid='dummy-user' 로 통과 (더미 로그인 지원)
+ * Firebase ID Token verification middleware
+ * - Production: Authorization: Bearer <idToken> header required
+ * - Development: Even if token is missing or invalid, passes with uid='dummy-user' (supports dummy login)
  */
 async function verifyFirebaseToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
-  // 토큰이 없는 경우
+  // No token provided
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     if (IS_DEV) {
       req.uid = "dummy-user";
       req.email = "dummy@dev.local";
       return next();
     }
-    return res.status(401).json({ error: "인증 토큰이 없습니다." });
+    return res.status(401).json({ error: "Authentication token is missing." });
   }
 
   const idToken = authHeader.split("Bearer ")[1];
@@ -29,12 +29,12 @@ async function verifyFirebaseToken(req, res, next) {
     next();
   } catch (err) {
     if (IS_DEV) {
-      // 개발 환경: 토큰이 잘못되어도 더미 유저로 통과
+      // Development: pass as dummy user even if token is invalid
       req.uid = "dummy-user";
       req.email = "dummy@dev.local";
       return next();
     }
-    return res.status(401).json({ error: "유효하지 않은 토큰입니다." });
+    return res.status(401).json({ error: "Invalid token." });
   }
 }
 

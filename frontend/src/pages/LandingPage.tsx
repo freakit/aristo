@@ -427,7 +427,7 @@ export const LandingPage: React.FC = () => {
       navigate('/upload')
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Google 로그인 오류:', err)
+        console.error('Google sign-in error:', err)
       }
     } finally {
       setSigningIn(false)
@@ -446,7 +446,7 @@ export const LandingPage: React.FC = () => {
         <HeaderRight>
           <GoogleBtn onClick={handleLogin} disabled={signingIn}>
             <GoogleIcon />
-            {signingIn ? '로그인 중...' : 'Google로 시작하기'}
+            {signingIn ? 'Signing in...' : 'Start with Google'}
           </GoogleBtn>
         </HeaderRight>
       </Header>
@@ -464,7 +464,7 @@ export const LandingPage: React.FC = () => {
         <CTARow>
           <GoogleBtn onClick={handleLogin} disabled={signingIn} style={{ padding: '15px 36px', fontSize: '16px' }}>
             <GoogleIcon />
-            {signingIn ? '로그인 중...' : 'Google로 무료 시작'}
+            {signingIn ? 'Signing in...' : 'Start Free with Google'}
           </GoogleBtn>
         </CTARow>
       </Hero>
