@@ -48,13 +48,11 @@ class DocumentMerger:
             self._log(f"요소 처리 중: {i}/{total} ({element.element_type})")
             
             if element.element_type == "image":
-                # 이미지 -> GPT-4o로 설명 생성
                 image_summary = self.converter.convert_image(element)
                 if image_summary:
                     all_chunks.append(image_summary)
                     
             elif element.element_type == "table":
-                # 표 -> 텍스트로 변환
                 table_text = self.converter.convert_table(element)
                 if table_text:
                     all_chunks.append(table_text)

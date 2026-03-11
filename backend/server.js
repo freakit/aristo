@@ -7,6 +7,7 @@ const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require("./config/swagger");
 const logger = require("./config/logger");
+const { createProxyMiddleware } = require("http-proxy-middleware");
 // const pinoHttp = require("pino-http")({ logger });
 
 const mainApiRouter = require("./routes");
@@ -22,6 +23,7 @@ const allowedOrigins = [
   "https://aristotest.freakit.co.kr",
   "http://localhost:3000",
   "http://localhost:3001", // Swagger UI
+  "http://localhost:5173", // Vite frontend
 ];
 
 const corsOptions = {
@@ -36,6 +38,19 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Proxy /api/live-question to Python Server
+const PYTHON_API_URL = process.env.AI_SERVER_URL || "http://localhost:8000";
+app.use(
+  "/api/live-question",
+  createProxyMiddleware({
+    target: PYTHON_API_URL,
+    changeOrigin: true,
+    ws: true,
+    pathRewrite: (path, req) => req.originalUrl, // Ensure original path is kept
+  })
+);
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // app.use(pinoHttp);
@@ -51,14 +66,7 @@ app.get("/", (req, res) => {
 
 // 중앙 에러 핸들러
 app.use((err, req, res, next) => {
-  if (req.path === "/api/trees/init") {
-    logger.error({ path: req.path }, "Error in /api/trees/init");
-  } else {
-    logger.error(
-      { method: req.method, path: req.path, err },
-      "Unhandled Error",
-    );
-  }
+  logger.error({ method: req.method, path: req.path, err }, "Unhandled Error");
 
   const statusCode = err.statusCode || 500;
   const message = err.message || "서버 내부 오류가 발생했습니다.";

@@ -39,7 +39,11 @@ figures/
 chroma_db/
 trees/
 uploads/
+sessions/
 
 # Documents (large files)
 documents/
 __pycache__/
+
+# Firebase
+serviceAccountKey.json

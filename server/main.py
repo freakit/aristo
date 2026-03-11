@@ -3,10 +3,8 @@ Aristo Backend - 통합 FastAPI 서버
 모든 API를 하나의 서버에서 관리합니다.
 
 서비스:
-  - /api/question  : 문제 출제 (소크라틱 Q&A)
-  - /api/stt       : 음성 인식 (STT)
-  - /api/voice     : 음성 분석 (eGeMAPS/GRBAS)
-  - /api/rag       : RAG 파이프라인 (PDF 청킹, 임베딩, 검색, 챗봇)
+  - /api/live-question : Gemini Live + RAG 소크라틱 튜터 (실시간 음성 Q&A)
+  - /api/rag           : RAG 파이프라인 (PDF 청킹, 임베딩, 검색)
 """
 
 import sys
@@ -23,8 +21,8 @@ from common.ai_client import init_ai_client
 # ====== FastAPI 앱 생성 ======
 app = FastAPI(
     title="Aristo Backend API",
-    description="교육 평가 시스템 통합 백엔드 (문제 출제, 음성 분석, STT, RAG)",
-    version="3.0.0",
+    description="AI 기반 구술 튜터링 서버 (Gemini Live + RAG 소크라틱 평가)",
+    version="4.0.0",
 )
 
 # ====== CORS 설정 ======
@@ -48,15 +46,11 @@ app.mount("/figures", StaticFiles(directory=str(figures_dir)), name="figures")
 
 
 # ====== 라우터 등록 ======
-from apis.question.router import router as question_router
-from apis.stt.router import router as stt_router
-from apis.voice.router import router as voice_router
 from apis.rag.router import router as rag_router
+from apis.liveQuestion.router import router as live_question_router
 
-app.include_router(question_router)
-app.include_router(stt_router)
-app.include_router(voice_router)
 app.include_router(rag_router)
+app.include_router(live_question_router)
 
 
 # ====== 공통 엔드포인트 ======
@@ -66,50 +60,35 @@ async def root():
     """서버 정보 및 API 목록"""
     return {
         "name": "Aristo Backend API",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "timestamp": datetime.now().isoformat(),
         "apis": {
-            "question": {
-                "prefix": "/api/question",
-                "description": "문제 출제 (소크라틱 Q&A 평가)",
+            "live_question": {
+                "prefix": "/api/live-question",
+                "description": "Gemini Live + RAG 소크라틱 튜터 (실시간 음성 Q&A)",
                 "endpoints": {
-                    "start": "POST /api/question/start",
-                    "answer": "POST /api/question/answer",
-                    "continue": "POST /api/question/continue",
-                    "end": "POST /api/question/end",
-                    "session": "GET /api/question/session/{id}",
-                    "sessions": "GET /api/question/sessions",
-                },
-            },
-            "stt": {
-                "prefix": "/api/stt",
-                "description": "음성 인식 (Whisper STT)",
-                "endpoints": {
-                    "transcribe": "POST /api/stt/transcribe",
-                },
-            },
-            "voice": {
-                "prefix": "/api/voice",
-                "description": "음성 분석 (eGeMAPS, GRBAS)",
-                "endpoints": {
-                    "analyze": "POST /api/voice/analyze",
-                    "transcribe_and_analyze": "POST /api/voice/transcribe-and-analyze",
+                    "create_session":   "POST   /api/live-question/session",
+                    "websocket":        "WS     /api/live-question/ws/{session_id}",
+                    "get_session":      "GET    /api/live-question/session/{session_id}",
+                    "get_transcript":   "GET    /api/live-question/session/{session_id}/transcript",
+                    "get_result":       "GET    /api/live-question/session/{session_id}/result",
+                    "get_missing":      "GET    /api/live-question/session/{session_id}/missing",
+                    "get_completed":    "GET    /api/live-question/session/{session_id}/completed",
+                    "list_sessions":    "GET    /api/live-question/sessions",
+                    "delete_session":   "DELETE /api/live-question/session/{session_id}",
                 },
             },
             "rag": {
                 "prefix": "/api/rag",
-                "description": "RAG 파이프라인 (PDF → 청킹 → 임베딩 → 검색 → 챗봇)",
+                "description": "RAG 파이프라인 (PDF → 청킹 → 임베딩 → 검색)",
                 "endpoints": {
-                    "chunk_pdfs": "POST /api/rag/chunk-pdfs",
-                    "embed_chunks": "POST /api/rag/embed-chunks",
-                    "search": "POST /api/rag/search",
-                    "chat": "POST /api/rag/chat",
-                    "sources": "GET /api/rag/sources",
-                    "delete_source": "DELETE /api/rag/sources/{source}",
-                    "db_info": "GET /api/rag/db-info",
-                    "chunked_files": "GET /api/rag/chunked-files",
-                    "download": "GET /api/rag/download/{filename}",
-                    "processing_logs": "GET /api/rag/processing-logs",
+                    "upload":           "POST   /api/rag/upload",
+                    "upload_logs":      "GET    /api/rag/upload-logs/{key}",
+                    "search":           "POST   /api/rag/search",
+                    "sources":          "GET    /api/rag/sources",
+                    "delete_source":    "DELETE /api/rag/sources/{source}",
+                    "db_info":          "GET    /api/rag/db-info",
+                    "chunk_count":      "GET    /api/rag/chunk-count",
                 },
             },
         },
@@ -131,17 +110,15 @@ async def health():
 async def startup_event():
     """서버 시작 시 초기화"""
     print("=" * 50)
-    print("🚀 Aristo Backend v3.0.0")
+    print("[Start] Aristo Backend v4.0.0")
     print("=" * 50)
 
     # AI 클라이언트 초기화
     init_ai_client()
 
-    print(f"📋 Question API: /api/question")
-    print(f"🎤 STT API:      /api/stt")
-    print(f"🔊 Voice API:    /api/voice")
-    print(f"📚 RAG API:      /api/rag")
-    print(f"📖 Swagger Docs: http://{HOST}:{PORT}/docs")
+    print(f"  - Live Question API: /api/live-question")
+    print(f"  - RAG API:           /api/rag")
+    print(f"  - Swagger Docs:      http://{HOST}:{PORT}/docs")
     print("=" * 50)
 
 
