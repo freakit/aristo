@@ -150,7 +150,15 @@ async def process_pdf_background(
             if not chunked_json.exists():
                 raise Exception("Chunking result file not created.")
 
-            add_log(key, f"[3/3] Starting Vector DB embedding...")
+            chunked_json = Path(chunked_output_path)
+            if not chunked_json.exists():
+                raise Exception("Chunking result file not created.")
+
+            with open(chunked_json, 'r', encoding='utf-8') as f:
+                chunks_data = json.load(f)
+
+            add_log(key, f"[2/3] Chunking complete: {len(chunks_data)} chunks created")
+            add_log(key, f"[3/3] Starting Vector DB embedding for {len(chunks_data)} chunks...")
 
             db_manager = VectorDBManager(
                 persist_directory="./chroma_db",
@@ -172,7 +180,10 @@ async def process_pdf_background(
             
             chunks_added = await loop.run_in_executor(
                 executor,
-                lambda: db_manager.add_from_json(str(temp_chunked))
+                lambda: db_manager.add_from_json(
+                    str(temp_chunked),
+                    progress_callback=lambda msg: add_log(key, msg)
+                )
             )
 
             add_log(key, f"[OK] Embedding complete: {chunks_added} chunks saved")

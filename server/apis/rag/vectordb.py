@@ -106,7 +106,8 @@ class VectorDBManager:
     def add_chunks(
         self,
         chunks: List[Dict[str, Any]],
-        batch_size: int = 100
+        batch_size: int = 100,
+        progress_callback=None
     ) -> int:
         """
         Add chunk data to Vector DB
@@ -383,7 +384,7 @@ class VectorDBManager:
         with open(json_path, "r", encoding="utf-8") as f:
             return json.load(f)
     
-    def add_from_json(self, json_path: str) -> int:
+    def add_from_json(self, json_path: str, progress_callback=None) -> int:
         """
         Read chunks from JSON file and add to Vector DB
         
@@ -405,7 +406,7 @@ class VectorDBManager:
         chunks = self.load_chunks_from_json(str(json_path))
         print(f"  - Loaded chunks: {len(chunks)}")
         
-        return self.add_chunks(chunks)
+        return self.add_chunks(chunks, progress_callback=progress_callback)
     
     def delete_by_source(self, source: str, key: Optional[str] = None) -> int:
         """
