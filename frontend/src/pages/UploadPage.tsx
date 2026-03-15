@@ -331,6 +331,50 @@ export const UploadPage: React.FC = () => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const updateProgressFromMessage = (message: string) => {
+    const elementMatch = message.match(/Processing element:\s*(\d+)\/(\d+)/i);
+    if (elementMatch) {
+      const current = Number(elementMatch[1]);
+      const total = Number(elementMatch[2]);
+      if (total > 0) {
+        const parsingProgress = 10 + Math.floor((current / total) * 45);
+        setProgress((prev) => Math.max(prev, parsingProgress));
+      }
+      return;
+    }
+
+    if (message.includes("[2/3] Starting chunking")) {
+      setProgress((prev) => Math.max(prev, 60));
+      return;
+    }
+
+    if (message.includes("Chunking complete")) {
+      setProgress((prev) => Math.max(prev, 70));
+      return;
+    }
+
+    if (message.includes("[3/3] Starting Vector DB embedding")) {
+      setProgress((prev) => Math.max(prev, 75));
+      return;
+    }
+
+    const embedMatch = message.match(/Embedding progress:\s*(\d+)\/(\d+)/i);
+    if (embedMatch) {
+      const current = Number(embedMatch[1]);
+      const total = Number(embedMatch[2]);
+      if (total > 0) {
+        const embeddingProgress = 75 + Math.floor((current / total) * 24);
+        setProgress((prev) => Math.max(prev, embeddingProgress));
+      }
+      return;
+    }
+
+    if (message.includes("Embedding complete")) {
+      setProgress((prev) => Math.max(prev, 99));
+      return;
+    }
+  };
+
   const handleProcess = async () => {
     if (!files.length) return;
     setStatus("uploading");
@@ -363,64 +407,6 @@ export const UploadPage: React.FC = () => {
         setStatus("processing");
 
         // 2. Continuous feedback via SSE
-        // await new Promise<void>((resolve, reject) => {
-        //   addLog({
-        //     type: "progress",
-        //     text: "Streaming processing logs via SSE...",
-        //     ts: now(),
-        //   });
-        //   const closeSSE = openSSE(
-        //     `/rag/upload-logs/${result.key}`,
-        //     (data) => {
-        //       try {
-        //         const msg = JSON.parse(data);
-        //         if (msg.type === "done" || msg.status === "success") {
-        //           addLog({
-        //             type: "success",
-        //             text: msg.message ?? "Processing complete.",
-        //             ts: now(),
-        //           });
-        //           closeSSE();
-        //           resolve();
-        //         } else if (msg.status === "error") {
-        //           addLog({
-        //             type: "error",
-        //             text: msg.message ?? "Processing error.",
-        //             ts: now(),
-        //           });
-        //           closeSSE();
-        //           reject(new Error(msg.message));
-        //         } else if (msg.status === "ping") {
-        //           // heartbeat - ignore
-        //         } else {
-        //           addLog({
-        //             type: "progress",
-        //             text: msg.message ?? data,
-        //             ts: now(),
-        //           });
-        //         }
-        //       } catch {
-        //         // plain text message
-        //         addLog({ type: "progress", text: data, ts: now() });
-        //       }
-        //     },
-        //     (e) => {
-        //       // done if SSE ends
-        //       const target = e.target as EventSource;
-        //       if (target.readyState === EventSource.CLOSED) {
-        //         closeSSE();
-        //         resolve();
-        //       }
-        //     },
-        //   );
-
-        //   // Timeout: 60s
-        //   setTimeout(() => {
-        //     closeSSE();
-        //     resolve();
-        //   }, 60000);
-        // });
-
         await new Promise<void>((resolve, reject) => {
           let settled = false;
 
@@ -473,17 +459,12 @@ export const UploadPage: React.FC = () => {
                   return;
                 }
 
-                addLog({
-                  type: "progress",
-                  text: msg.message ?? data,
-                  ts: now(),
-                });
+                const text = msg.message ?? data;
+                updateProgressFromMessage(text);
+                addLog({ type: "progress", text, ts: now() });
               } catch {
-                addLog({
-                  type: "progress",
-                  text: data,
-                  ts: now(),
-                });
+                updateProgressFromMessage(data);
+                addLog({ type: "progress", text: data, ts: now() });
               }
             },
             () => {
