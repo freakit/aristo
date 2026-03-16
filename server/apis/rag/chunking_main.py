@@ -76,7 +76,7 @@ class DocumentChunker:
         """
         # Sentence split pattern
         # Behind . ! ? followed by space or end of string, excluding abbreviation patterns
-        sentence_endings = re.compile(r'(?<=[.!?])\s+(?=[A-Z가-힣])|(?<=[.!?])$')
+        sentence_endings = re.compile(r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])$')
         
         # Split by newline first
         lines = text.split('\n')
