@@ -3,6 +3,7 @@ import styled from 'styled-components'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { theme } from '../styles/theme'
+import aristoLogo from '../assets/Aristo_logo_nobg.png'
 
 const Header = styled.header`
   position: sticky;
@@ -38,20 +39,11 @@ const Right = styled.div`
   min-width: 160px;
 `
 
-const LogoMark = styled.div`
+const LogoImage = styled.img`
   width: 28px; height: 28px;
-  border: 1.5px solid rgba(255,255,255,0.7);
-  border-radius: 5px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: ${theme.fonts.display};
-  font-size: 15px;
-  font-style: italic;
-  font-weight: 300;
-  color: #fff;
   margin-right: 8px;
   flex-shrink: 0;
+  object-fit: contain;
 `
 
 const LogoText = styled.span`
@@ -126,7 +118,7 @@ export const AppHeader: React.FC = () => {
     <Header>
       <Left>
         <div onClick={() => navigate('/upload')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-          <LogoMark>A</LogoMark>
+          <LogoImage src={aristoLogo} alt="Aristo Logo" />
           <LogoText>Aristo</LogoText>
         </div>
       </Left>
