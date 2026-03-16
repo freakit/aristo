@@ -3,6 +3,7 @@ import styled from 'styled-components'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { theme } from '../styles/theme'
+import aristoLogo from '../assets/Aristo_logo_nobg.png'
 
 const Page = styled.div`
   background: #050505;
@@ -32,18 +33,9 @@ const HeaderLeft = styled.div`
   flex: 1;
 `
 
-const LogoMark = styled.div`
+const LogoImage = styled.img`
   width: 32px; height: 32px;
-  border: 1.5px solid rgba(255,255,255,0.85);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: ${theme.fonts.display};
-  font-size: 17px;
-  font-style: italic;
-  font-weight: 300;
-  color: #ffffff;
+  object-fit: contain;
 `
 
 const LogoText = styled.span`
@@ -440,7 +432,7 @@ export const LandingPage: React.FC = () => {
 
       <Header>
         <HeaderLeft>
-          <LogoMark>A</LogoMark>
+          <LogoImage src={aristoLogo} alt="Aristo Logo" />
           <LogoText>Aristo</LogoText>
         </HeaderLeft>
         <HeaderRight>
