@@ -1,17 +1,25 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
-import styled, { keyframes } from 'styled-components'
-import { AppHeader } from '../components/AppHeader'
-import { Button } from '../components/Button'
-import { Card, CardHeader, CardTitle, PageLayout, PageTitle, PageSubtitle, Badge } from '../components/Card'
-import { theme } from '../styles/theme'
-import { api, openSSE } from '../lib/api'
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import styled, { keyframes } from "styled-components";
+import { AppHeader } from "../components/AppHeader";
+import { Button } from "../components/Button";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  PageLayout,
+  PageTitle,
+  PageSubtitle,
+  Badge,
+} from "../components/Card";
+import { theme } from "../styles/theme";
+import { api, openSSE } from "../lib/api";
 
 // ---- API Types ----
 interface RagSource {
-  docId: string
-  source: string
-  key: string
-  uploadedAt: string
+  docId: string;
+  source: string;
+  key: string;
+  uploadedAt: string;
 }
 
 // -------------------
@@ -19,10 +27,11 @@ interface RagSource {
 const pulse = keyframes`
   0%, 100% { opacity: 1 }
   50% { opacity: 0.4 }
-`
+`;
 
 const DropZone = styled.div<{ active: boolean }>`
-  border: 1.5px dashed ${(p: any) => p.active ? theme.colors.accent : theme.colors.border};
+  border: 1.5px dashed
+    ${(p: any) => (p.active ? theme.colors.accent : theme.colors.border)};
   border-radius: ${theme.radii.lg};
   padding: 56px 40px;
   display: flex;
@@ -33,12 +42,17 @@ const DropZone = styled.div<{ active: boolean }>`
   gap: 10px;
   cursor: pointer;
   transition: all 0.2s;
-  background: ${(p: any) => p.active ? 'rgba(37,99,235,0.04)' : 'transparent'};
-  &:hover { border-color: ${theme.colors.borderLight}; background: ${theme.colors.bgHover}; }
-`
+  background: ${(p: any) =>
+    p.active ? "rgba(37,99,235,0.04)" : "transparent"};
+  &:hover {
+    border-color: ${theme.colors.borderLight};
+    background: ${theme.colors.bgHover};
+  }
+`;
 
 const DropIcon = styled.div`
-  width: 44px; height: 44px;
+  width: 44px;
+  height: 44px;
   border: 1px solid ${theme.colors.border};
   border-radius: ${theme.radii.md};
   display: flex;
@@ -47,25 +61,25 @@ const DropIcon = styled.div`
   color: ${theme.colors.textMuted};
   font-size: 20px;
   margin-bottom: 6px;
-`
+`;
 
 const DropTitle = styled.p`
   font-size: 14px;
   font-weight: 500;
   color: ${theme.colors.textPrimary};
-`
+`;
 
 const DropSub = styled.p`
   font-size: 13px;
   color: ${theme.colors.textSecondary};
-`
+`;
 
 const FileList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: 16px;
-`
+`;
 
 const FileRow = styled.div`
   display: flex;
@@ -75,7 +89,7 @@ const FileRow = styled.div`
   background: ${theme.colors.bgCard};
   border: 1px solid ${theme.colors.border};
   border-radius: ${theme.radii.md};
-`
+`;
 
 const FileName = styled.span`
   font-size: 13px;
@@ -85,7 +99,7 @@ const FileName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-`
+`;
 
 const FileSize = styled.span`
   font-size: 12px;
@@ -93,7 +107,7 @@ const FileSize = styled.span`
   font-family: ${theme.fonts.mono};
   margin-right: 10px;
   flex-shrink: 0;
-`
+`;
 
 const RemoveBtn = styled.button`
   color: ${theme.colors.textMuted};
@@ -102,8 +116,11 @@ const RemoveBtn = styled.button`
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.15s;
-  &:hover { color: ${theme.colors.error}; background: rgba(220,38,38,0.08); }
-`
+  &:hover {
+    color: ${theme.colors.error};
+    background: rgba(220, 38, 38, 0.08);
+  }
+`;
 
 const LogWindow = styled.div`
   background: #060a10;
@@ -115,33 +132,44 @@ const LogWindow = styled.div`
   font-family: ${theme.fonts.mono};
   font-size: 12px;
   line-height: 1.85;
-`
+`;
 
-interface LogEntry { type: 'info' | 'success' | 'error' | 'progress'; text: string; ts: string }
+interface LogEntry {
+  type: "info" | "success" | "error" | "progress";
+  text: string;
+  ts: string;
+}
 
-const colorMap: Record<LogEntry['type'], string> = {
+const colorMap: Record<LogEntry["type"], string> = {
   info: theme.colors.textSecondary,
   success: theme.colors.successLight,
   error: theme.colors.error,
-  progress: '#60A5FA'
-}
-const prefixMap: Record<LogEntry['type'], string> = { info: '·', success: '✓', error: '✗', progress: '→' }
+  progress: "#60A5FA",
+};
+const prefixMap: Record<LogEntry["type"], string> = {
+  info: "·",
+  success: "✓",
+  error: "✗",
+  progress: "→",
+};
 
-const LogLine = styled.div<{ type: LogEntry['type'] }>`
-  color: ${(p: { type: LogEntry['type'] }) => colorMap[p.type]};
+const LogLine = styled.div<{ type: LogEntry["type"] }>`
+  color: ${(p: { type: LogEntry["type"] }) => colorMap[p.type]};
   &::before {
-    content: '${(p: { type: LogEntry['type'] }) => prefixMap[p.type]}  ';
+    content: "${(p: { type: LogEntry["type"] }) => prefixMap[p.type]}  ";
     margin-right: 4px;
   }
-`
+`;
 
 const TwoCol = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
   align-items: start;
-  @media (max-width: 768px) { grid-template-columns: 1fr; }
-`
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
 
 const ProgressBar = styled.div<{ value: number }>`
   height: 4px;
@@ -150,7 +178,7 @@ const ProgressBar = styled.div<{ value: number }>`
   overflow: hidden;
   margin-top: 16px;
   &::after {
-    content: '';
+    content: "";
     display: block;
     height: 100%;
     width: ${(p: any) => p.value}%;
@@ -158,33 +186,35 @@ const ProgressBar = styled.div<{ value: number }>`
     border-radius: 2px;
     transition: width 0.4s ease;
   }
-`
+`;
 
 const StatusRow = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 8px;
-`
+`;
 
 const StatusText = styled.span`
   font-size: 12px;
   font-family: ${theme.fonts.mono};
   color: ${theme.colors.textMuted};
-`
+`;
 
 const PulsingDot = styled.span<{ active: boolean }>`
   display: inline-block;
-  width: 6px; height: 6px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: ${(p: any) => p.active ? theme.colors.accent : theme.colors.textMuted};
-  animation: ${(p: any) => p.active ? pulse : 'none'} 1.2s ease infinite;
+  background: ${(p: any) =>
+    p.active ? theme.colors.accent : theme.colors.textMuted};
+  animation: ${(p: any) => (p.active ? pulse : "none")} 1.2s ease infinite;
   margin-right: 6px;
-`
+`;
 
 const SourceSection = styled.div`
   margin-top: 24px;
-`
+`;
 
 const SourceRow = styled.div`
   display: flex;
@@ -195,7 +225,7 @@ const SourceRow = styled.div`
   border: 1px solid ${theme.colors.border};
   border-radius: ${theme.radii.md};
   margin-bottom: 8px;
-`
+`;
 
 const SourceName = styled.span`
   font-size: 13px;
@@ -205,7 +235,7 @@ const SourceName = styled.span`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-`
+`;
 
 const SourceDate = styled.span`
   font-size: 11px;
@@ -213,180 +243,337 @@ const SourceDate = styled.span`
   font-family: ${theme.fonts.mono};
   margin-right: 10px;
   flex-shrink: 0;
-`
+`;
 
 const fmtSize = (b: number) =>
-  b < 1024 ? b + ' B' : b < 1048576 ? (b / 1024).toFixed(1) + ' KB' : (b / 1048576).toFixed(1) + ' MB'
-const now = () => new Date().toLocaleTimeString('en-US', { hour12: false })
+  b < 1024
+    ? b + " B"
+    : b < 1048576
+      ? (b / 1024).toFixed(1) + " KB"
+      : (b / 1048576).toFixed(1) + " MB";
+const now = () => new Date().toLocaleTimeString("en-US", { hour12: false });
 
 export const UploadPage: React.FC = () => {
-  const [files, setFiles] = useState<File[]>([])
-  const [dragging, setDragging] = useState(false)
-  const [logs, setLogs] = useState<LogEntry[]>([{ type: 'info', text: 'Upload PDF files to begin processing.', ts: now() }])
-  const [progress, setProgress] = useState(0)
-  const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle')
-  const [sources, setSources] = useState<RagSource[]>([])
-  const [sourcesLoading, setSourcesLoading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const logEndRef = useRef<HTMLDivElement>(null)
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([
+    { type: "info", text: "Upload PDF files to begin processing.", ts: now() },
+  ]);
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState<
+    "idle" | "uploading" | "processing" | "done" | "error"
+  >("idle");
+  const [sources, setSources] = useState<RagSource[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const addLog = useCallback((entry: LogEntry) => {
-    setLogs(prev => {
-      const next = [...prev, entry]
-      setTimeout(() => logEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-      return next
-    })
-  }, [])
+    setLogs((prev) => {
+      const next = [...prev, entry];
+      setTimeout(
+        () => logEndRef.current?.scrollIntoView({ behavior: "smooth" }),
+        50,
+      );
+      return next;
+    });
+  }, []);
 
   // Load list of uploaded materials
   const fetchSources = useCallback(async () => {
-    setSourcesLoading(true)
+    setSourcesLoading(true);
     try {
-      const data = await api.get<RagSource[]>('/rag/sources')
-      setSources(data)
+      const data = await api.get<RagSource[]>("/rag/sources");
+      setSources(data);
     } catch (err: any) {
-      addLog({ type: 'error', text: `Failed to load sources: ${err.message}`, ts: now() })
+      addLog({
+        type: "error",
+        text: `Failed to load sources: ${err.message}`,
+        ts: now(),
+      });
     } finally {
-      setSourcesLoading(false)
+      setSourcesLoading(false);
     }
-  }, [addLog])
+  }, [addLog]);
 
-  useEffect(() => { fetchSources() }, [fetchSources])
+  useEffect(() => {
+    fetchSources();
+  }, [fetchSources]);
 
   const handleFiles = (newFiles: FileList | null) => {
-    if (!newFiles) return
-    const pdfs = Array.from(newFiles).filter(f => f.type === 'application/pdf')
-    const invalid = Array.from(newFiles).filter(f => f.type !== 'application/pdf')
-    if (invalid.length) addLog({ type: 'error', text: `PDF files only. Rejected: ${invalid.map(f => f.name).join(', ')}`, ts: now() })
+    if (!newFiles) return;
+    const pdfs = Array.from(newFiles).filter(
+      (f) => f.type === "application/pdf",
+    );
+    const invalid = Array.from(newFiles).filter(
+      (f) => f.type !== "application/pdf",
+    );
+    if (invalid.length)
+      addLog({
+        type: "error",
+        text: `PDF files only. Rejected: ${invalid.map((f) => f.name).join(", ")}`,
+        ts: now(),
+      });
     if (pdfs.length) {
-      setFiles(prev => [...prev, ...pdfs])
-      pdfs.forEach(f => addLog({ type: 'info', text: `Added "${f.name}" (${fmtSize(f.size)})`, ts: now() }))
+      setFiles((prev) => [...prev, ...pdfs]);
+      pdfs.forEach((f) =>
+        addLog({
+          type: "info",
+          text: `Added "${f.name}" (${fmtSize(f.size)})`,
+          ts: now(),
+        }),
+      );
     }
-  }
+  };
 
   const removeFile = (idx: number) => {
-    addLog({ type: 'info', text: `Removed "${files[idx].name}"`, ts: now() })
-    setFiles(prev => prev.filter((_, i) => i !== idx))
-  }
+    addLog({ type: "info", text: `Removed "${files[idx].name}"`, ts: now() });
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateProgressFromMessage = (message: string) => {
+    const elementMatch = message.match(/Processing element:\s*(\d+)\/(\d+)/i);
+    if (elementMatch) {
+      const current = Number(elementMatch[1]);
+      const total = Number(elementMatch[2]);
+      if (total > 0) {
+        const parsingProgress = 10 + Math.floor((current / total) * 45);
+        setProgress((prev) => Math.max(prev, parsingProgress));
+      }
+      return;
+    }
+
+    if (message.includes("[2/3] Starting chunking")) {
+      setProgress((prev) => Math.max(prev, 60));
+      return;
+    }
+
+    if (message.includes("Chunking complete")) {
+      setProgress((prev) => Math.max(prev, 70));
+      return;
+    }
+
+    if (message.includes("[3/3] Starting Vector DB embedding")) {
+      setProgress((prev) => Math.max(prev, 75));
+      return;
+    }
+
+    const embedMatch = message.match(/Embedding progress:\s*(\d+)\/(\d+)/i);
+    if (embedMatch) {
+      const current = Number(embedMatch[1]);
+      const total = Number(embedMatch[2]);
+      if (total > 0) {
+        const embeddingProgress = 75 + Math.floor((current / total) * 24);
+        setProgress((prev) => Math.max(prev, embeddingProgress));
+      }
+      return;
+    }
+
+    if (message.includes("Embedding complete")) {
+      setProgress((prev) => Math.max(prev, 99));
+      return;
+    }
+  };
 
   const handleProcess = async () => {
-    if (!files.length) return
-    setStatus('uploading')
-    setProgress(5)
+    if (!files.length) return;
+    setStatus("uploading");
+    setProgress(5);
 
     for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      addLog({ type: 'progress', text: `Uploading "${file.name}"... (${i + 1}/${files.length})`, ts: now() })
+      const file = files[i];
+      addLog({
+        type: "progress",
+        text: `Uploading "${file.name}"... (${i + 1}/${files.length})`,
+        ts: now(),
+      });
 
       try {
         // 1. Upload PDF -> receive key
-        const form = new FormData()
-        form.append('file', file)
-        const result = await api.postForm<{ docId: string; source: string; key: string; uploadedAt: string }>(
-          '/rag/upload', form
-        )
-        addLog({ type: 'success', text: `Uploaded "${result.source}" (key: ${result.key})`, ts: now() })
-        setProgress(10 + Math.floor(((i + 0.5) / files.length) * 60))
-        setStatus('processing')
+        const form = new FormData();
+        form.append("file", file);
+        const result = await api.postForm<{
+          docId: string;
+          source: string;
+          key: string;
+          uploadedAt: string;
+        }>("/rag/upload", form);
+        addLog({
+          type: "success",
+          text: `Uploaded "${result.source}" (key: ${result.key})`,
+          ts: now(),
+        });
+        setProgress(10 + Math.floor(((i + 0.5) / files.length) * 60));
+        setStatus("processing");
 
         // 2. Continuous feedback via SSE
         await new Promise<void>((resolve, reject) => {
-          addLog({ type: 'progress', text: 'Streaming processing logs via SSE...', ts: now() })
+          let settled = false;
+
+          const finish = (cb: () => void) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            closeSSE();
+            cb();
+          };
+
           const closeSSE = openSSE(
             `/rag/upload-logs/${result.key}`,
             (data) => {
               try {
-                const msg = JSON.parse(data)
-                if (msg.type === 'done' || msg.status === 'success') {
-                  addLog({ type: 'success', text: msg.message ?? 'Processing complete.', ts: now() })
-                  closeSSE()
-                  resolve()
-                } else if (msg.status === 'error') {
-                  addLog({ type: 'error', text: msg.message ?? 'Processing error.', ts: now() })
-                  closeSSE()
-                  reject(new Error(msg.message))
-                } else if (msg.status === 'ping') {
-                  // heartbeat - ignore
-                } else {
-                  addLog({ type: 'progress', text: msg.message ?? data, ts: now() })
+                const msg = JSON.parse(data);
+
+                if (msg.status === "success") {
+                  addLog({
+                    type: "success",
+                    text: msg.message ?? "Processing complete.",
+                    ts: now(),
+                  });
+                  finish(resolve);
+                  return;
                 }
+
+                if (msg.status === "error") {
+                  addLog({
+                    type: "error",
+                    text: msg.message ?? "Processing error.",
+                    ts: now(),
+                  });
+                  finish(() =>
+                    reject(new Error(msg.message ?? "Processing failed")),
+                  );
+                  return;
+                }
+
+                if (msg.status === "ping" || msg.status === "connected") {
+                  return;
+                }
+
+                if (msg.status === "done") {
+                  addLog({
+                    type: "info",
+                    text: msg.message ?? "Log stream ended.",
+                    ts: now(),
+                  });
+                  return;
+                }
+
+                const text = msg.message ?? data;
+                updateProgressFromMessage(text);
+                addLog({ type: "progress", text, ts: now() });
               } catch {
-                // 단순 텍스트 메시지
-                addLog({ type: 'progress', text: data, ts: now() })
+                updateProgressFromMessage(data);
+                addLog({ type: "progress", text: data, ts: now() });
               }
             },
-            (e) => {
-              // done if SSE ends
-              const target = e.target as EventSource
-              if (target.readyState === EventSource.CLOSED) {
-                closeSSE()
-                resolve()
-              }
-            }
-          )
+            () => {
+              finish(() =>
+                reject(
+                  new Error("Log stream disconnected before backend success"),
+                ),
+              );
+            },
+          );
 
-          // Timeout: 60s
-          setTimeout(() => { closeSSE(); resolve() }, 60000)
-        })
+          const timer = setTimeout(
+            () => {
+              finish(() =>
+                reject(
+                  new Error(
+                    "Processing timed out while waiting for backend success",
+                  ),
+                ),
+              );
+            },
+            10 * 60 * 1000,
+          );
+        });
 
-        setProgress(10 + Math.floor(((i + 1) / files.length) * 85))
-
+        setProgress(10 + Math.floor(((i + 1) / files.length) * 85));
       } catch (err: any) {
-        setStatus('error')
-        addLog({ type: 'error', text: `Error: ${err.message}`, ts: now() })
-        return
+        setStatus("error");
+        addLog({ type: "error", text: `Error: ${err.message}`, ts: now() });
+        return;
       }
     }
 
-    setProgress(100)
-    setStatus('done')
-    addLog({ type: 'success', text: 'All files processed. Fetching updated source list...', ts: now() })
-    await fetchSources()
-  }
+    setProgress(100);
+    setStatus("done");
+    addLog({
+      type: "success",
+      text: "Backend confirmed processing complete. Refreshing source list...", // All files processed. Fetching updated source list...
+      ts: now(),
+    });
+    await fetchSources();
+  };
 
   const handleDeleteSource = async (docId: string, sourceName: string) => {
     try {
-      await api.delete(`/rag/sources/${docId}`)
-      addLog({ type: 'info', text: `Deleted "${sourceName}"`, ts: now() })
-      setSources(prev => prev.filter(s => s.docId !== docId))
+      await api.delete(`/rag/sources/${docId}`);
+      addLog({ type: "info", text: `Deleted "${sourceName}"`, ts: now() });
+      setSources((prev) => prev.filter((s) => s.docId !== docId));
     } catch (err: any) {
-      addLog({ type: 'error', text: `Delete failed: ${err.message}`, ts: now() })
+      addLog({
+        type: "error",
+        text: `Delete failed: ${err.message}`,
+        ts: now(),
+      });
     }
-  }
+  };
 
-  const isProcessing = status === 'uploading' || status === 'processing'
+  const isProcessing = status === "uploading" || status === "processing";
 
   const statusLabel: Record<typeof status, string> = {
-    idle: 'Idle',
-    uploading: 'Uploading',
-    processing: 'Processing',
-    done: 'Done',
-    error: 'Error',
-  }
+    idle: "Idle",
+    uploading: "Uploading",
+    processing: "Processing",
+    done: "Done",
+    error: "Error",
+  };
 
   return (
     <>
       <AppHeader />
       <PageLayout>
         <PageTitle>Upload Materials</PageTitle>
-        <PageSubtitle>Upload your PDF lecture files. They will be vectorized and stored for RAG-based tutoring.</PageSubtitle>
+        <PageSubtitle>
+          Upload your PDF lecture files. They will be vectorized and stored for
+          RAG-based tutoring.
+        </PageSubtitle>
 
         <TwoCol>
           <div>
             <Card>
               <CardHeader>
                 <CardTitle>PDF Upload</CardTitle>
-                {files.length > 0 && <Badge color="blue">{files.length} selected</Badge>}
+                {files.length > 0 && (
+                  <Badge color="blue">{files.length} selected</Badge>
+                )}
               </CardHeader>
 
-              <input ref={fileInputRef} type="file" accept=".pdf" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                multiple
+                style={{ display: "none" }}
+                onChange={(e) => handleFiles(e.target.files)}
+              />
 
               <DropZone
                 active={dragging}
                 onClick={() => fileInputRef.current?.click()}
-                onDragOver={e => { e.preventDefault(); setDragging(true) }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
                 onDragLeave={() => setDragging(false)}
-                onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  handleFiles(e.dataTransfer.files);
+                }}
               >
                 <DropIcon>📄</DropIcon>
                 <DropTitle>Click or drag files here</DropTitle>
@@ -406,22 +593,31 @@ export const UploadPage: React.FC = () => {
               )}
             </Card>
 
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
               <Button
                 variant="primary"
                 size="md"
-                disabled={!files.length || isProcessing || status === 'done'}
+                disabled={!files.length || isProcessing || status === "done"}
                 loading={isProcessing}
                 onClick={handleProcess}
                 fullWidth
               >
-                {status === 'done' ? 'Processing Complete ✓' : isProcessing ? 'Processing...' : 'Upload & Process'}
+                {status === "done"
+                  ? "Processing Complete ✓"
+                  : isProcessing
+                    ? "Processing..."
+                    : "Upload & Process"}
               </Button>
-              {(status === 'done' || status === 'error') && (
+              {(status === "done" || status === "error") && (
                 <Button
                   variant="secondary"
                   size="md"
-                  onClick={() => { setFiles([]); setProgress(0); setStatus('idle'); setLogs([{ type: 'info', text: 'Reset.', ts: now() }]) }}
+                  onClick={() => {
+                    setFiles([]);
+                    setProgress(0);
+                    setStatus("idle");
+                    setLogs([{ type: "info", text: "Reset.", ts: now() }]);
+                  }}
                 >
                   Reset
                 </Button>
@@ -435,15 +631,25 @@ export const UploadPage: React.FC = () => {
                 {!sourcesLoading && <Badge>{sources.length}</Badge>}
               </CardHeader>
               {sourcesLoading ? (
-                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>Loading...</p>
+                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>
+                  Loading...
+                </p>
               ) : sources.length === 0 ? (
-                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>No uploaded sources yet.</p>
+                <p style={{ fontSize: 13, color: theme.colors.textMuted }}>
+                  No uploaded sources yet.
+                </p>
               ) : (
-                sources.map(s => (
+                sources.map((s) => (
                   <SourceRow key={s.docId}>
                     <SourceName>{s.source}</SourceName>
-                    <SourceDate>{new Date(s.uploadedAt).toLocaleDateString('en-US')}</SourceDate>
-                    <RemoveBtn onClick={() => handleDeleteSource(s.docId, s.source)}>×</RemoveBtn>
+                    <SourceDate>
+                      {new Date(s.uploadedAt).toLocaleDateString("en-US")}
+                    </SourceDate>
+                    <RemoveBtn
+                      onClick={() => handleDeleteSource(s.docId, s.source)}
+                    >
+                      ×
+                    </RemoveBtn>
                   </SourceRow>
                 ))
               )}
@@ -454,19 +660,31 @@ export const UploadPage: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Processing Status</CardTitle>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <PulsingDot active={isProcessing} />
-                  <span style={{ fontSize: 12, color: theme.colors.textSecondary, fontFamily: theme.fonts.mono }}>{statusLabel[status]}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.fonts.mono,
+                    }}
+                  >
+                    {statusLabel[status]}
+                  </span>
                 </div>
               </CardHeader>
-              {(isProcessing || status === 'done' || status === 'error') && (
+              {(isProcessing || status === "done" || status === "error") && (
                 <>
                   <ProgressBar value={progress} />
                   <StatusRow>
                     <StatusText>
-                      {status === 'uploading' ? 'Uploading to server' :
-                       status === 'processing' ? 'Vectorizing (RAG)' :
-                       status === 'done' ? 'Complete' : ''}
+                      {status === "uploading"
+                        ? "Uploading to server"
+                        : status === "processing"
+                          ? "Vectorizing (RAG)"
+                          : status === "done"
+                            ? "Complete"
+                            : ""}
                     </StatusText>
                     <StatusText>{progress}%</StatusText>
                   </StatusRow>
@@ -482,7 +700,11 @@ export const UploadPage: React.FC = () => {
               <LogWindow>
                 {logs.map((log, i) => (
                   <LogLine key={i} type={log.type}>
-                    <span style={{ color: theme.colors.textMuted, marginRight: 8 }}>[{log.ts}]</span>
+                    <span
+                      style={{ color: theme.colors.textMuted, marginRight: 8 }}
+                    >
+                      [{log.ts}]
+                    </span>
                     {log.text}
                   </LogLine>
                 ))}
@@ -493,5 +715,5 @@ export const UploadPage: React.FC = () => {
         </TwoCol>
       </PageLayout>
     </>
-  )
-}
+  );
+};

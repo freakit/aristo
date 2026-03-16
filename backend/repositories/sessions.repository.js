@@ -2,13 +2,13 @@
 const { db } = require("../config/firebase");
 
 class SessionsRepository {
-  // 세션 생성
+  // Create session
   async createSession({ uid, title, vectorDocIds, vectorKeys, studyGoals }) {
     const docRef = db.collection("sessions").doc();
     const now = new Date().toISOString();
     const data = {
       uid,
-      title: title || "새 학습 세션",
+      title: title || "New Learning Session",
       vectorDocIds: vectorDocIds || [],
       vectorKeys: vectorKeys || [],
       studyGoals: studyGoals || [],
@@ -20,7 +20,7 @@ class SessionsRepository {
     return { sessionId: docRef.id, ...data };
   }
 
-  // 내 세션 목록 조회 (최신순, 페이지네이션)
+  // Get session list by uid (latest first, paginated)
   async getSessionsByUid(uid, { limit = 20, before = null } = {}) {
     let query = db
       .collection("sessions")
@@ -40,14 +40,14 @@ class SessionsRepository {
     return docs.slice(0, limit);
   }
 
-  // 세션 단건 조회
+  // Get single session by ID
   async getSessionById(sessionId) {
     const snap = await db.collection("sessions").doc(sessionId).get();
     if (!snap.exists) return null;
     return { sessionId: snap.id, ...snap.data() };
   }
 
-  // 세션 종료
+  // End session
   async endSession(sessionId) {
     const ref = db.collection("sessions").doc(sessionId);
     await ref.update({ status: "ended", updatedAt: new Date().toISOString() });
@@ -55,11 +55,11 @@ class SessionsRepository {
     return { sessionId: snap.id, ...snap.data() };
   }
 
-  // 세션 삭제 (메시지 서브컬렉션 포함)
+  // Delete session (including messages subcollection)
   async deleteSession(sessionId) {
     const sessionRef = db.collection("sessions").doc(sessionId);
 
-    // 서브컬렉션 메시지 일괄 삭제
+    // Batch delete subcollection messages
     const messagesSnap = await sessionRef.collection("messages").get();
     const batch = db.batch();
     messagesSnap.docs.forEach((doc) => batch.delete(doc.ref));
@@ -67,7 +67,7 @@ class SessionsRepository {
     await batch.commit();
   }
 
-  // 메시지 추가
+  // Add message
   async addMessage(sessionId, { role, content, turn }) {
     const msgRef = db
       .collection("sessions")
@@ -82,7 +82,7 @@ class SessionsRepository {
     };
     await msgRef.set(data);
 
-    // 세션 updatedAt 갱신
+    // Update session updatedAt
     await db
       .collection("sessions")
       .doc(sessionId)
@@ -91,7 +91,7 @@ class SessionsRepository {
     return { msgId: msgRef.id, ...data };
   }
 
-  // 세션의 전체 메시지 조회 (순서대로)
+  // Get all messages in a session (ordered)
   async getMessages(sessionId) {
     const snap = await db
       .collection("sessions")

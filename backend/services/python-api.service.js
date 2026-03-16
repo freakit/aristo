@@ -18,7 +18,7 @@ module.exports = {
         student_info: studentInfo,
         exam_info: examInfo,
         attachments: attachments,
-        rag_keys: vectorKeys, // ✅ keys -> rag_keys (Python API 스펙에 맞춤)
+        rag_keys: vectorKeys, // ✅ keys -> rag_keys (match Python API spec)
       });
 
       logger.info(

@@ -1,38 +1,38 @@
 # ARISTO — AI-powered Real-time Interactive Speaking Tutor & Orchestrator
 
-**FreakIT**에서 개발한 AI 기반 구술 튜터링 플랫폼.  
-학생이 PDF를 업로드하면 AI가 RAG로 자료를 검색하며 소크라틱 질문으로 이해를 실시간 평가합니다.
+An AI-based oral tutoring platform developed by **FreakIT**.
+When a student uploads a PDF, the AI retrieves materials using RAG and evaluates understanding in real-time through Socratic questioning.
 
 ---
 
-## 🌟 주요 기능
+## 🌟 Key Features
 
-| 기능 | 설명 |
+| Feature | Description |
 |---|---|
-| PDF 업로드 & 벡터화 | PDF → Python RAG 서버에서 파싱 → 청킹 → ChromaDB 임베딩 |
-| **Gemini Live 튜터 모드** ★ | Gemini Live API + RAG Function Calling 기반 실시간 음성 소크라틱 평가 |
-| Missing / Completed 추적 | AI가 학생 답변에서 누락 개념을 자동 추적 → 세션별 MD 파일로 저장 |
-| 음성 실시간 스트리밍 | PCM 16kHz 오디오 → WebSocket → Gemini Live AI 음성 응답 |
-| Firebase Auth | Google 계정으로 로그인, ID Token으로 모든 API 인증 |
+| PDF Upload & Vectorization | PDF → Parsed in Python RAG Server → Chunking → ChromaDB Embedding |
+| **Gemini Live Tutor Mode** ★ | Real-time Socratic voice evaluation based on Gemini Live API + RAG Function Calling |
+| Missing / Completed Tracking | AI automatically tracks missing concepts from student answers → Saved as MD files per session |
+| Real-time Voice Streaming | PCM 16kHz audio → WebSocket → Gemini Live AI voice response |
+| Firebase Auth | Login with Google account, all APIs authenticated with ID Token |
 
 ---
 
-## 🏗️ 아키텍처
+## 🏗️ Architecture
 
 ```
 [Browser: React + Vite]
         ↓  /api/*  (Vite proxy → :3001)
 [backend: Node.js / Express - :3001]
-  ├─ Firebase Auth (JWT 검증)
-  ├─ Firestore (세션, 메시지, 벡터 메타데이터)
+  ├─ Firebase Auth (JWT Verification)
+  ├─ Firestore (Sessions, Messages, Vector Metadata)
   └─ HTTP proxy ──→ [server: Python FastAPI - :8000]
-                        ├─ /api/live-question  (Gemini Live + RAG 소크라틱 튜터) ★
-                        └─ /api/rag            (PDF 파이프라인)
+                        ├─ /api/live-question  (Gemini Live + RAG Socratic Tutor) ★
+                        └─ /api/rag            (PDF Pipeline)
 ```
 
 ---
 
-## 🛠 기술 스택
+## 🛠 Tech Stack
 
 ### Frontend (`frontend/`)
 | | |
@@ -41,36 +41,36 @@
 | Styling | styled-components |
 | Routing | react-router-dom |
 | Auth | Firebase Client SDK (`onAuthStateChanged`) |
-| API | 자체 `apiFetch` 래퍼 (Bearer 토큰 자동 주입) + WebSocket |
+| API | Custom `apiFetch` wrapper (Auto-injects Bearer token) + WebSocket |
 
 ### Backend (`backend/`)  ─ Node.js Express (:3001)
 | | |
 |---|---|
-| Auth | Firebase Admin SDK (`verifyFirebaseToken` 미들웨어) |
-| DB | Cloud Firestore (`sessions`, `vectordb`, `users` 컬렉션) |
-| RAG 연동 | axios → Python server `/api/rag/*` |
-| Live 연동 | WebSocket proxy → Python server `/api/live-question/ws/*` |
+| Auth | Firebase Admin SDK (`verifyFirebaseToken` middleware) |
+| DB | Cloud Firestore (`sessions`, `vectordb`, `users` collections) |
+| RAG Integration | axios → Python server `/api/rag/*` |
+| Live Integration | WebSocket proxy → Python server `/api/live-question/ws/*` |
 
 ### Server (`server/`) — Python FastAPI (:8000)
 | | |
 |---|---|
 | Framework | FastAPI + Uvicorn |
 | AI | Google Gemini Live API (`gemini-2.5-flash-native-audio-preview`) |
-| Vector DB | ChromaDB (로컬) |
-| RAG | PDF 파싱 → 청킹 → 임베딩 → 하이브리드 검색 |
+| Vector DB | ChromaDB (Local) |
+| RAG | PDF Parsing → Chunking → Embedding → Hybrid Search |
 | Live Tutor | Gemini Live WebSocket + RAG Function Calling (`search_db` / `add_missing_point` / `mark_completed`) |
 
 ---
 
-## 🚀 실행 방법
+## 🚀 How to Run
 
-### 사전 요구사항
+### Prerequisites
 - Node.js v18+
 - Python 3.12+
-- Firebase 프로젝트 (Firestore, Auth 활성화)
+- Firebase Project (Firestore, Auth enabled)
 - Gemini API Key
 
-### 1. Python AI 서버 (`server/`)
+### 1. Python AI Server (`server/`)
 
 ```bash
 cd server
@@ -78,7 +78,7 @@ python -m venv venv
 .\venv\Scripts\activate   # Windows
 pip install -r requirements.txt
 
-# .env 설정
+# .env Configuration
 cp .env.example .env
 # GEMINI_API_KEY=...
 
@@ -87,30 +87,30 @@ python main.py
 # → Swagger: http://localhost:8000/docs
 ```
 
-### 2. Node.js 백엔드 (`backend/`)
+### 2. Node.js Backend (`backend/`)
 
 ```bash
 cd backend
 npm install
 
-# .env 설정
+# .env Configuration
 cp .env.example .env
-# FIREBASE_STORAGE_BUCKET, AI_SERVER_URL 입력
-# serviceAccountKey.json 파일을 backend/ 루트에 배치
+# Enter FIREBASE_STORAGE_BUCKET, AI_SERVER_URL
+# Place the serviceAccountKey.json file in the backend/ root
 
 npm run dev
 # → http://localhost:3001
 ```
 
-### 3. 프론트엔드 (`frontend/`)
+### 3. Frontend (`frontend/`)
 
 ```bash
 cd frontend
 npm install
 
-# .env 설정
+# .env Configuration
 cp .env.example .env
-# VITE_FIREBASE_* 및 VITE_API_URL 입력
+# Enter VITE_FIREBASE_* and VITE_API_URL
 
 npm run dev
 # → http://localhost:5173
@@ -118,71 +118,71 @@ npm run dev
 
 ---
 
-## 📂 프로젝트 구조
+## 📂 Project Structure
 
 ```
 aristo/
-├── backend/                 # Node.js Express 서버 (:3001)
-│   ├── config/              # Firebase, Logger 설정
-│   ├── controllers/         # RAG, Live Question, Sessions 컨트롤러
+├── backend/                 # Node.js Express Server (:3001)
+│   ├── config/              # Firebase, Logger Configuration
+│   ├── controllers/         # RAG, Live Question, Sessions Controllers
 │   ├── middleware/          # verifyFirebaseToken
 │   ├── repositories/        # Firestore CRUD
 │   ├── routes/              # auth / rag / sessions / live-question
-│   ├── services/               # rag, sessions, python-api 서비스
-│   ├── api_spec.md             # Node.js API 명세
+│   ├── services/            # rag, sessions, python-api Services
+│   ├── api_spec.md          # Node.js API Specifications
 │   └── server.js
-├── server/                     # Python FastAPI 서버 (:8000)
+├── server/                  # Python FastAPI Server (:8000)
 │   ├── apis/
-│   │   ├── liveQuestion/       # Gemini Live + RAG 소크라틱 튜터 ★
-│   │   │   ├── router.py       # WebSocket + REST CRUD
-│   │   │   ├── service.py      # Gemini Live 세션 관리 / Tool 실행
-│   │   │   ├── prompts.py      # 시스템 프롬프트 (KR/EN)
-│   │   │   └── models.py       # 요청/응답 모델
-│   │   └── rag/                # RAG 파이프라인
-│   ├── common/                 # ai_client, config
-│   ├── sessions/               # 세션별 Missing.md / Completed.md 저장
-│   ├── API_SPEC.md             # Python API 명세
+│   │   ├── liveQuestion/    # Gemini Live + RAG Socratic Tutor ★
+│   │   │   ├── router.py    # WebSocket + REST CRUD
+│   │   │   ├── service.py   # Gemini Live Session Management / Tool Execution
+│   │   │   ├── prompts.py   # System Prompts (KR/EN)
+│   │   │   └── models.py    # Request/Response Models
+│   │   └── rag/             # RAG Pipeline
+│   ├── common/              # ai_client, config
+│   ├── sessions/            # Stores Missing.md / Completed.md per session
+│   ├── API_SPEC.md          # Python API Specifications
 │   └── main.py
-└── frontend/                # React + Vite 프론트엔드 (:5173)
+└── frontend/                # React + Vite Frontend (:5173)
     ├── src/
-    │   ├── components/         # AppHeader, Button, Card 등 공통 컴포넌트
-    │   ├── hooks/              # AuthContext (Firebase 연동)
-    │   ├── lib/                # api.ts (fetch/WebSocket 래퍼)
-    │   ├── pages/              # Landing / Upload / Aim / Study
-    │   └── styles/             # theme
-    └── vite.config.ts          # /api, /ws 프록시 → :3001
+    │   ├── components/      # Common Components like AppHeader, Button, Card
+    │   ├── hooks/           # AuthContext (Firebase Integration)
+    │   ├── lib/             # api.ts (fetch/WebSocket wrapper)
+    │   ├── pages/           # Landing / Upload / Aim / Study
+    │   └── styles/          # theme
+    └── vite.config.ts       # /api, /ws proxy → :3001
 ```
 
 ---
 
-## 🔗 API 흐름 요약
+## 🔗 API Flow Summary
 
-### Live 튜터 세션 (핵심 기능)
+### Live Tutor Session (Core Feature)
 
 ```
-1. POST /api/live-question/session   → 세션 생성 (session_id + ws_url 반환)
-2. WS   /api/live-question/ws/{id}  → WebSocket 연결 (Gemini Live 브리지)
-   ├─ Client→Server: PCM 오디오 (binary) 또는 {"type":"text","content":"..."}
-   ├─ Server→Client: binary (Gemini AI 음성) / JSON 이벤트
+1. POST /api/live-question/session   → Create Session (Returns session_id + ws_url)
+2. WS   /api/live-question/ws/{id}   → WebSocket Connection (Gemini Live Bridge)
+   ├─ Client→Server: PCM Audio (binary) or {"type":"text","content":"..."}
+   ├─ Server→Client: binary (Gemini AI Voice) / JSON Events
    │     ready | transcript | turn_complete
    │     tool_call_start | tool_call_end
    │     missing_update | completed_update | error
-   └─ Client→Server: {"type":"end"} → 세션 종료
-3. GET  /api/live-question/session/{id}/result  → 최종 결과 (transcript, missing, completed)
+   └─ Client→Server: {"type":"end"}  → End Session
+3. GET  /api/live-question/session/{id}/result  → Final Results (transcript, missing, completed)
 ```
 
-### RAG 파이프라인
+### RAG Pipeline
 
 ```
-1. POST /api/rag/upload              → PDF 업로드 (백그라운드 처리)
-2. GET  /api/rag/upload-logs/:key    → SSE 진행 로그 스트리밍
-3. GET  /api/rag/sources             → 내 자료 목록
-4. DELETE /api/rag/sources/:docId   → 자료 삭제
+1. POST /api/rag/upload              → Upload PDF (Background processing)
+2. GET  /api/rag/upload-logs/:key    → SSE Progress log streaming
+3. GET  /api/rag/sources             → My Materials List
+4. DELETE /api/rag/sources/:docId    → Delete Material
 ```
 
 ---
 
-## ⚖️ 라이선스
+## ⚖️ License
 
-**Copyright © 2025 FreakIT. All rights reserved.**  
-이 소프트웨어는 FreakIT의 소유입니다. 무단 복제, 배포, 상업적 이용을 금지합니다.
+**Copyright © 2025 FreakIT. All rights reserved.**
+This software is the property of FreakIT. Unauthorized reproduction, distribution, and commercial use are prohibited.

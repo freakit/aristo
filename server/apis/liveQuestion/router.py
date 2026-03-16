@@ -1,6 +1,6 @@
 """
-Gemini Live Q&A API 라우터
-WebSocket 기반 실시간 오디오 스트리밍 + RAG 검색
+Gemini Live Q&A API Router
+WebSocket-based real-time audio streaming + RAG search
 """
 
 import time
@@ -26,26 +26,26 @@ from apis.liveQuestion.service import (
     get_session_dir,
 )
 
-router = APIRouter(prefix="/api/live-question", tags=["Live Question - 실시간 문제 출제"])
+router = APIRouter(prefix="/api/live-question", tags=["Live Question - Real-time assessment"])
 
 
-# ====== 세션 CRUD ======
+# ====== Session CRUD ======
 
-@router.post("/session", response_model=LiveSessionStartResponse, summary="세션 생성")
+@router.post("/session", response_model=LiveSessionStartResponse, summary="Create Session")
 async def api_create_session(req: LiveSessionStartRequest):
     """
-    ## Live 세션 생성
+    ## Create Live Session
 
-    시험 세션을 생성하고 WebSocket 연결 정보를 반환합니다.
+    Creates an exam session and returns WebSocket connection info.
 
-    | 필드 | 설명 |
+    | Field | Description |
     |---|---|
-    | `student_info` | 학생 정보 (name, id 등 자유 형식) |
-    | `exam_info` | 시험 정보 — `content` 필드에 시험 주제/안내문 |
-    | `rag_keys` | RAG 검색 시 참조할 문서 key 목록 (없으면 null) |
-    | `system_prompt_override` | 커스텀 AI 튜터 프롬프트 (없으면 기본값 사용) |
+    | `student_info` | Student info (free-form, e.g. name, id) |
+    | `exam_info` | Exam info — exam topic/instructions in `content` field |
+    | `rag_keys` | List of RAG document keys to reference (null if none) |
+    | `system_prompt_override` | Custom AI tutor prompt (uses default if none) |
 
-    **응답:** `session_id` + `ws_url` → WebSocket 연결에 사용
+    **Response:** `session_id` + `ws_url` → Use to connect to WebSocket
     """
     session_id = create_live_session(
         student_info=req.student_info,
@@ -65,9 +65,9 @@ from pydantic import BaseModel
 class GoalGenRequest(BaseModel):
     rag_keys: List[str]
 
-@router.post("/generate-goals", summary="학습 목표 자동 생성")
+@router.post("/generate-goals", summary="Auto-generate learning goals")
 async def api_generate_goals(req: GoalGenRequest):
-    """지정된 문서(키)들로부터 학습 목표 3가지를 자동 추출합니다."""
+    """Auto-extracts 3 learning goals from the specified documents (keys)."""
     if not req.rag_keys:
         return {"goals": []}
     
@@ -81,12 +81,12 @@ async def api_generate_goals(req: GoalGenRequest):
     return {"goals": goals}
 
 
-@router.get("/session/{session_id}", response_model=LiveSessionInfoResponse, summary="세션 정보 조회")
+@router.get("/session/{session_id}", response_model=LiveSessionInfoResponse, summary="Get session info")
 async def api_get_session(session_id: str):
-    """세션 상태 및 기본 정보 조회"""
+    """Get session status and basic info"""
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     return LiveSessionInfoResponse(
         session_id=session_id,
@@ -100,21 +100,21 @@ async def api_get_session(session_id: str):
     )
 
 
-@router.get("/session/{session_id}/transcript", response_model=TranscriptResponse, summary="대화 기록 조회")
+@router.get("/session/{session_id}/transcript", response_model=TranscriptResponse, summary="Get conversation history")
 async def api_get_transcript(session_id: str):
     """
-    ## 세션 대화 기록 조회
+    ## Get session conversation history
 
-    AI 발화 텍스트 및 학생 텍스트 입력 기록을 반환합니다.
+    Returns AI speech text and student text input history.
 
-    - `role: "ai"` — Gemini AI 발화
-    - `role: "user_text"` — 학생 텍스트 입력 (`{"type":"text","content":"..."}`)
+    - `role: "ai"` — Gemini AI speech
+    - `role: "user_text"` — Student text input (`{"type":"text","content":"..."}`)
 
-    > 실시간 음성 입력은 서버에서 텍스트 변환이 없으므로 기록되지 않습니다.
+    > Real-time voice inputs are not recorded as there is no server-side text conversion.
     """
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     transcript: List[TranscriptEntry] = session.get("transcript", [])
     return TranscriptResponse(
@@ -125,24 +125,24 @@ async def api_get_transcript(session_id: str):
     )
 
 
-@router.get("/session/{session_id}/result", response_model=SessionResultResponse, summary="세션 최종 결과")
+@router.get("/session/{session_id}/result", response_model=SessionResultResponse, summary="Session final result")
 async def api_get_result(session_id: str):
     """
-    ## 세션 최종 결과 조회
+    ## Get session final result
 
-    시험 완료 후 전체 결과를 반환합니다.
+    Returns the complete results after exam completion.
 
-    | 필드 | 설명 |
+    | Field | Description |
     |---|---|
     | `status` | `pending` / `active` / `completed` |
-    | `transcript` | 전체 대화 기록 |
-    | `duration_seconds` | 시험 소요 시간 (완료된 경우) |
-    | `student_info` | 학생 정보 |
-    | `exam_info` | 시험 정보 |
+    | `transcript` | Complete conversation history |
+    | `duration_seconds` | Exam duration (if completed) |
+    | `student_info` | Student info |
+    | `exam_info` | Exam info |
     """
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     created_at = session.get("created_at", 0)
     ended_at   = session.get("ended_at")
@@ -162,9 +162,9 @@ async def api_get_result(session_id: str):
     )
 
 
-@router.get("/sessions", response_model=LiveSessionListResponse, summary="세션 목록 조회")
+@router.get("/sessions", response_model=LiveSessionListResponse, summary="Get session list")
 async def api_list_sessions():
-    """모든 세션 목록 조회 (진행 중 + 완료)"""
+    """Get all sessions (in-progress + completed)"""
     result = []
     for sid, s in live_sessions.items():
         result.append(LiveSessionInfoResponse(
@@ -180,26 +180,26 @@ async def api_list_sessions():
     return LiveSessionListResponse(sessions=result, total=len(result))
 
 
-@router.delete("/session/{session_id}", summary="세션 삭제")
+@router.delete("/session/{session_id}", summary="Delete session")
 async def api_delete_session(session_id: str):
-    """세션 삭제 (메모리에서 제거)"""
+    """Delete session (remove from memory)"""
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
     delete_live_session(session_id)
-    return {"message": "세션이 삭제되었습니다.", "session_id": session_id}
+    return {"message": "Session deleted.", "session_id": session_id}
 
 
-@router.get("/session/{session_id}/missing", summary="Missing 포인트 목록 조회")
+@router.get("/session/{session_id}/missing", summary="Get missing points list")
 async def api_get_missing(session_id: str):
     """
-    ## Missing 포인트 목록 조회
+    ## Get missing points list
 
-    현재 세션에서 학생이 누락하거나 불충분하게 설명한 항목 목록을 반환합니다.
+    Returns a list of items the student missed or explained insufficiently in the current session.
     """
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     missing = session.get("missing_points", [])
     return {
@@ -209,16 +209,16 @@ async def api_get_missing(session_id: str):
     }
 
 
-@router.get("/session/{session_id}/completed", summary="Completed 포인트 목록 조회")
+@router.get("/session/{session_id}/completed", summary="Get completed points list")
 async def api_get_completed(session_id: str):
     """
-    ## Completed 포인트 목록 조회
+    ## Get completed points list
 
-    현재 세션에서 해결되거나 AI가 직접 설명한 항목 목록을 반환합니다.
+    Returns a list of items resolved or directly explained by AI in the current session.
     """
     session = get_live_session(session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+        raise HTTPException(status_code=404, detail="Session not found.")
 
     completed = session.get("completed_points", [])
     return {
@@ -228,49 +228,49 @@ async def api_get_completed(session_id: str):
     }
 
 
-# ====== WebSocket 엔드포인트 ======
+# ====== WebSocket Endpoint ======
 
 @router.websocket("/ws/{session_id}")
 async def websocket_live_session(websocket: WebSocket, session_id: str):
     """
-    ## 실시간 오디오 스트리밍 WebSocket
+    ## Real-time Audio Streaming WebSocket
 
-    ### 클라이언트 → 서버
-    | 타입 | 형식 | 설명 |
+    ### Client → Server
+    | Type | Format | Description |
     |---|---|---|
-    | 오디오 | `binary` | PCM 16-bit, 16kHz, mono |
-    | 종료 | `{"type":"end"}` | 세션 종료 |
-    | 텍스트 | `{"type":"text","content":"..."}` | 텍스트 입력 |
+    | Audio | `binary` | PCM 16-bit, 16kHz, mono |
+    | End | `{"type":"end"}` | End session |
+    | Text | `{"type":"text","content":"..."}` | Text input |
 
-    ### 서버 → 클라이언트
-    | 타입 | 형식 | 설명 |
+    ### Server → Client
+    | Type | Format | Description |
     |---|---|---|
-    | 오디오 | `binary` | PCM 16-bit, 24kHz, mono (Gemini 음성) |
-    | `ready` | JSON | Gemini 연결 완료 |
-    | `transcript` | JSON | AI 발화 텍스트 (자막) |
-    | `tool_call_start` | JSON | RAG 검색 시작 |
-    | `tool_call_end` | JSON | RAG 검색 완료 |
-    | `turn_complete` | JSON | Gemini 한 턴 완료 |
-    | `error` | JSON | 오류 발생 |
+    | Audio | `binary` | PCM 16-bit, 24kHz, mono (Gemini voice) |
+    | `ready` | JSON | Gemini connection established |
+    | `transcript` | JSON | AI speech text (subtitles) |
+    | `tool_call_start` | JSON | RAG search started |
+    | `tool_call_end` | JSON | RAG search completed |
+    | `turn_complete` | JSON | Gemini completed one turn |
+    | `error` | JSON | Error occurred |
     """
     session = get_live_session(session_id)
     if not session:
-        await websocket.close(code=4004, reason="세션을 찾을 수 없습니다.")
+        await websocket.close(code=4004, reason="Session not found.")
         return
 
     if session.get("status") == SessionStatus.COMPLETED:
-        await websocket.close(code=4001, reason="이미 종료된 세션입니다.")
+        await websocket.close(code=4001, reason="Session already ended.")
         return
 
     await websocket.accept()
-    print(f"[{session_id}] [Connected] WebSocket 연결됨")
+    print(f"[{session_id}] [Connected] WebSocket connected")
 
     try:
         await handle_live_session(session_id, websocket)
     except WebSocketDisconnect:
-        print(f"[{session_id}] [Disconnected] WebSocket 연결 해제")
+        print(f"[{session_id}] [Disconnected] WebSocket disconnected")
     except Exception as e:
-        print(f"[{session_id}] [Error] WebSocket 오류: {e}")
+        print(f"[{session_id}] [Error] WebSocket error: {e}")
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
@@ -280,4 +280,4 @@ async def websocket_live_session(websocket: WebSocket, session_id: str):
             await websocket.close()
         except Exception:
             pass
-        print(f"[{session_id}] [End] Live 세션 종료")
+        print(f"[{session_id}] [End] Live session ended")

@@ -63,7 +63,7 @@ class SessionsController {
   async deleteSession(req, res, next) {
     try {
       await sessionsService.deleteSession(req.params.sessionId, req.uid);
-      res.json({ message: "삭제 완료" });
+      res.json({ message: "Deleted successfully" });
     } catch (error) {
       next(error);
     }

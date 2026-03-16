@@ -1,6 +1,6 @@
 """
 Element Converter Module
-이미지를 Gemini Vision API로 텍스트 설명으로 변환하는 모듈
+Module that converts images to text descriptions using Gemini Vision API
 """
 
 import os
@@ -13,15 +13,15 @@ from dotenv import load_dotenv
 
 from apis.rag.pdf_parser import ParsedElement
 
-# 환경 변수 로드
+# Load environment variables
 load_dotenv()
 
 
 class ElementConverter:
-    """요소를 텍스트로 변환하는 클래스 (Gemini 전용)"""
+    """Class that converts elements to text (Gemini only)"""
     
     def __init__(self):
-        """Gemini 클라이언트 초기화"""
+        """Initialize Gemini client"""
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_client = None
         
@@ -30,13 +30,13 @@ class ElementConverter:
     
     def convert(self, element: ParsedElement) -> str:
         """
-        요소를 텍스트로 변환
+        Convert element to text
         
         Args:
-            element: 파싱된 요소
+            element: Parsed element
             
         Returns:
-            텍스트 내용
+            Text content
         """
         if element.element_type == "image":
             return self.convert_image(element)
@@ -47,16 +47,16 @@ class ElementConverter:
     
     def classify_image(self, image_path: Path) -> str:
         """
-        이미지가 콘텐츠인지 장식인지 분류
+        Classify whether image is content or decorative
         
         Args:
-            image_path: 이미지 파일 경로
+            image_path: Image file path
             
         Returns:
-            'CONTENT' (교육 콘텐츠) 또는 'DECORATIVE' (로고, 장식 등)
+            'CONTENT' (Educational content) or 'DECORATIVE' (logos, decorations, etc.)
         """
         if not self.gemini_client:
-            # 분류 불가 시 기본적으로 콘텐츠로 간주
+            # Assume content by default if classification fails
             return "CONTENT"
         
         try:
@@ -82,7 +82,7 @@ DECORATIVE: Publisher logos, company logos, watermarks, page decorations, icons 
 Reply with ONLY one word: CONTENT or DECORATIVE"""
 
             response = self.gemini_client.models.generate_content(
-                model="gemini-3.1-flash-lite-preview",  # 빠르고 저렴한 모델 사용
+                model="gemini-3.1-flash-lite-preview",  # Use fast and cheap model
                 contents=[
                     types.Content(
                         role="user",
@@ -93,7 +93,7 @@ Reply with ONLY one word: CONTENT or DECORATIVE"""
                     )
                 ],
                 config=types.GenerateContentConfig(
-                    http_options={"timeout": 10000}  # 10초 타임아웃
+                    http_options={"timeout": 10000}  # 10 seconds timeout
                 )
             )
             
@@ -103,43 +103,43 @@ Reply with ONLY one word: CONTENT or DECORATIVE"""
             return "CONTENT"
             
         except Exception as e:
-            print(f"이미지 분류 실패 ({image_path.name}): {e}")
-            # 분류 실패 시 기본적으로 콘텐츠로 간주
+            print(f"Image classification failed ({image_path.name}): {e}")
+            # Assume content by default if classification fails
             return "CONTENT"
     
     def convert_image(self, element: ParsedElement) -> str:
         """
-        이미지를 텍스트 설명으로 변환 (Gemini Vision 사용)
+        Convert image to text description (using Gemini Vision)
         
         Args:
-            element: 이미지 요소
+            element: Image element
             
         Returns:
-            이미지에 대한 텍스트 설명
+            Text description for the image
         """
         if not element.image_path:
-            return "[이미지: 경로 없음]"
+            return "[Image: No path]"
         
         image_path = Path(element.image_path)
         if not image_path.exists():
-            return f"[이미지: 파일 없음 - {element.image_path}]"
+            return f"[Image: File not found - {element.image_path}]"
         
-        # 이미지 분류: DECORATIVE면 건너뛰기
+        # Image classification: skip if DECORATIVE
         classification = self.classify_image(image_path)
         if classification == "DECORATIVE":
-            print(f"  → 이미지 건너뜀 (DECORATIVE): {image_path.name}")
-            return ""  # 빈 문자열 반환하여 결과에서 제외
+            print(f"  -> Skipping image (DECORATIVE): {image_path.name}")
+            return ""  # Return empty string to exclude from result
         
         if not self.gemini_client:
-            return f"[이미지: {image_path.name}] (Gemini API 키 없음 - 설명 생성 불가)"
+            return f"[Image: {image_path.name}] (No Gemini API key - cannot generate description)"
         
         try:
-            # 이미지를 base64로 인코딩
+            # Encode image as base64
             with open(image_path, "rb") as f:
                 image_data = f.read()
             base64_image = base64.b64encode(image_data).decode('utf-8')
             
-            # 이미지 MIME 타입 결정
+            # Determine image MIME type
             suffix = image_path.suffix.lower()
             mime_types = {
                 '.png': 'image/png',
@@ -152,7 +152,7 @@ Reply with ONLY one word: CONTENT or DECORATIVE"""
             
             model_name = "gemini-3-flash-preview"
             
-            # Base64 디코딩하여 바이트로 변환
+            # Decode Base64 to bytes
             image_bytes = base64.b64decode(base64_image)
             
             prompt = """You are an OCR model specialized in transcribing handwritten or typed lecture notes with high accuracy.
@@ -181,7 +181,7 @@ Your task is to extract only the essential lecture content from the provided doc
    - If visual elements exist:
      - Follow standard rules.
 
-RAG 시스템에서 검색될 수 있도록 구체적인 용어와 내용을 포함하세요."""
+Include specific terms and details so it can be searched in the RAG system."""
 
             response = self.gemini_client.models.generate_content(
                 model=model_name,
@@ -205,26 +205,26 @@ RAG 시스템에서 검색될 수 있도록 구체적인 용어와 내용을 포
             return f"{description}"
                 
         except Exception as e:
-            print(f"이미지 변환 실패 ({image_path.name}): {e}")
-            return f"[이미지: {image_path.name}] (변환 실패: {str(e)[:50]})"
+            print(f"Image conversion failed ({image_path.name}): {e}")
+            return f"[Image: {image_path.name}] (Conversion failed: {str(e)[:50]})"
     
     def convert_table(self, element: ParsedElement) -> str:
         """
-        표 요소를 텍스트로 변환
+        Convert table element to text
         
         Args:
-            element: 표 요소
+            element: Table element
             
         Returns:
-            표의 텍스트 표현
+            Text representation of the table
         """
-        result_parts = ["[표]"]
+        result_parts = ["[Table]"]
         
-        # HTML 형식이 있으면 추가
+        # Add HTML format if present
         if element.metadata.get("html"):
             result_parts.append(f"HTML: {element.metadata['html']}")
         
-        # 텍스트 내용
+        # Text content
         if element.content:
             result_parts.append(element.content)
         
@@ -232,13 +232,13 @@ RAG 시스템에서 검색될 수 있도록 구체적인 용어와 내용을 포
     
     def refine_text(self, text: str) -> str:
         """
-        텍스트 내의 수식을 LaTeX 형식으로 변환하고 텍스트를 다듬음
+        Convert formulas in text to LaTeX format and refine text
         
         Args:
-            text: 원본 텍스트
+            text: Original text
             
         Returns:
-            다듬어진 텍스트
+            Refined text
         """
         if not text or not text.strip():
             return text
@@ -277,14 +277,14 @@ Text to refine:
                     error_str = str(retry_e)
                     if "DEADLINE_EXCEEDED" in error_str or "504" in error_str:
                         if attempt < max_retries - 1:
-                            print(f"텍스트 정제 타임아웃, 재시도 중... ({attempt + 1}/{max_retries})")
+                            print(f"Text refinement timeout, retrying... ({attempt + 1}/{max_retries})")
                             import time
-                            time.sleep(1)  # 1초 대기 후 재시도
+                            time.sleep(1)  # Retry after 1 sec delay
                             continue
                     raise retry_e
             
         except Exception as e:
-            print(f"텍스트 정제 실패: {e}")
+            print(f"Text refinement failed: {e}")
             return text
         
         return text
@@ -292,13 +292,13 @@ Text to refine:
 
 def get_image_summary(image_path: str) -> str:
     """
-    이미지를 Gemini로 설명하는 헬퍼 함수
+    Helper function that describes image with Gemini
     
     Args:
-        image_path: 이미지 파일 경로
+        image_path: Image file path
     
     Returns:
-        이미지 설명 텍스트
+        Image description text
     """
     converter = ElementConverter()
     element = ParsedElement(
@@ -310,11 +310,11 @@ def get_image_summary(image_path: str) -> str:
 
 
 def main():
-    """테스트용 메인 함수"""
+    """Main function for testing"""
     import sys
     
     if len(sys.argv) < 2:
-        print("사용법: python element_converter.py <image_path>")
+        print("Usage: python element_converter.py <image_path>")
         return
     
     image_path = sys.argv[1]

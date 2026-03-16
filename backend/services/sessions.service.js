@@ -13,16 +13,16 @@ class SessionsService {
     });
   }
 
-  // 존재 확인 + 소유권 확인을 서비스에서 처리
+  // Existence check + ownership check handled in service layer
   async getSession(sessionId, uid) {
     const session = await sessionsRepository.getSessionById(sessionId);
     if (!session) {
-      const err = new Error("세션을 찾을 수 없습니다.");
+      const err = new Error("Session not found.");
       err.statusCode = 404;
       throw err;
     }
     if (session.uid !== uid) {
-      const err = new Error("접근 권한이 없습니다.");
+      const err = new Error("Access denied.");
       err.statusCode = 403;
       throw err;
     }
@@ -33,12 +33,12 @@ class SessionsService {
   async endSession(sessionId, uid) {
     const session = await sessionsRepository.getSessionById(sessionId);
     if (!session) {
-      const err = new Error("세션을 찾을 수 없습니다.");
+      const err = new Error("Session not found.");
       err.statusCode = 404;
       throw err;
     }
     if (session.uid !== uid) {
-      const err = new Error("접근 권한이 없습니다.");
+      const err = new Error("Access denied.");
       err.statusCode = 403;
       throw err;
     }
@@ -48,12 +48,12 @@ class SessionsService {
   async deleteSession(sessionId, uid) {
     const session = await sessionsRepository.getSessionById(sessionId);
     if (!session) {
-      const err = new Error("세션을 찾을 수 없습니다.");
+      const err = new Error("Session not found.");
       err.statusCode = 404;
       throw err;
     }
     if (session.uid !== uid) {
-      const err = new Error("접근 권한이 없습니다.");
+      const err = new Error("Access denied.");
       err.statusCode = 403;
       throw err;
     }

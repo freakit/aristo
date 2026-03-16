@@ -15,7 +15,7 @@ const mainApiRouter = require("./routes");
 const app = express();
 const server = http.createServer(app);
 
-// 허용할 출처 목록
+// Allowed origins list
 const allowedOrigins = [
   "https://aristo.freakit.co.kr",
   "https://aristo.netlify.app",
@@ -64,34 +64,34 @@ app.get("/", (req, res) => {
   res.status(200).send("ARISTO AI-Tutor Backend Server is running!");
 });
 
-// 중앙 에러 핸들러
+// Central error handler
 app.use((err, req, res, next) => {
   logger.error({ method: req.method, path: req.path, err }, "Unhandled Error");
 
   const statusCode = err.statusCode || 500;
-  const message = err.message || "서버 내부 오류가 발생했습니다.";
+  const message = err.message || "Internal server error.";
 
   res.status(statusCode).json({ error: message });
 });
 
-// ⭐ 전역 예외 핸들러 추가 - 프로세스 크래시 방지
+// ⭐ Global exception handler — prevent process crash
 process.on("uncaughtException", (error) => {
   logger.fatal({ err: error }, "Uncaught exception");
-  // 프로세스를 종료하지 않고 계속 실행
+  // Keep process running without exiting
 });
 
 process.on("unhandledRejection", (reason, promise) => {
   logger.error({ reason, promise }, "Unhandled promise rejection");
-  // 프로세스를 종료하지 않고 계속 실행
+  // Keep process running without exiting
 });
 
-// 서버 시작
+// Start server
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   logger.info({ port: PORT }, "ARISTO server is running");
 });
 
-// 서버 에러 핸들링
+// Server error handling
 server.on("error", (error) => {
   logger.fatal({ err: error }, "Server Error");
 });

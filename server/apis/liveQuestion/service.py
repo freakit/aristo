@@ -1,10 +1,10 @@
 """
-Gemini Live Q&A 서비스 모듈
-- Gemini Live API (WebSocket) 세션 관리
-- ChromaDB RAG 검색 연동 (Function Calling)
-- Missing / Completed 포인트 추적 (add_missing_point / mark_completed)
-- 실시간 오디오 스트리밍 처리
-- 트랜스크립트 저장
+Gemini Live Q&A Service Module
+- Manage Gemini Live API (WebSocket) sessions
+- Integrate ChromaDB RAG search (Function Calling)
+- Track Missing / Completed points (add_missing_point / mark_completed)
+- Process real-time audio streaming
+- Store transcripts
 """
 
 import os
@@ -66,7 +66,7 @@ async def _generate_initial_goals(keys: List[str], aio_client) -> List[str]:
         print(f"Goal generation err: {e}")
         return []
 
-# ====== 설정 ======
+# ====== Configuration ======
 
 GEMINI_LIVE_MODEL = os.getenv(
     "GEMINI_LIVE_MODEL",
@@ -74,29 +74,28 @@ GEMINI_LIVE_MODEL = os.getenv(
 )
 RAG_TOP_K = int(os.getenv("RAG_SEARCH_TOP_K", "5"))
 
-# 오디오 설정
-SEND_SAMPLE_RATE    = 16000   # 입력: 16kHz 16-bit PCM mono
-RECEIVE_SAMPLE_RATE = 24000   # 출력: 24kHz 16-bit PCM mono
+# Audio settings
+SEND_SAMPLE_RATE    = 16000   # Input: 16kHz 16-bit PCM mono
+RECEIVE_SAMPLE_RATE = 24000   # Output: 24kHz 16-bit PCM mono
 
-# Missing / Completed 파일 저장 기본 경로
+# Base path for Missing / Completed files
 SESSIONS_DIR = Path(__file__).parent.parent.parent / "sessions"
 
-# ====== 세션 저장소 (in-memory) ======
+# ====== Session Storage (in-memory) ======
 live_sessions: Dict[str, Dict[str, Any]] = {}
 
-# ====== VectorDB 인스턴스 (공유) ======
+# ====== VectorDB Instance (Shared) ======
 _vector_db: Optional[VectorDBManager] = None
 
-
 def get_vector_db() -> VectorDBManager:
-    """VectorDBManager 싱글톤 인스턴스 반환"""
+    """Return VectorDBManager singleton instance"""
     global _vector_db
     if _vector_db is None:
         _vector_db = VectorDBManager()
     return _vector_db
 
 
-# ====== Tool 선언 ======
+# ====== Tool Declarations ======
 
 SEARCH_DB_DECLARATION = {
     "name": "search_db",
@@ -120,19 +119,19 @@ SEARCH_DB_DECLARATION = {
 ADD_MISSING_POINT_DECLARATION = {
     "name": "add_missing_point",
     "description": (
-        "학생이 답변에서 누락했거나 불충분하게 설명한 개념/포인트를 Missing 목록에 등록합니다. "
-        "학생의 답변을 평가한 후, 부족하다고 판단되는 부분마다 이 도구를 호출하세요. "
-        "중요: 이미 Missing 목록에 있거나 비슷한 내용이 있는 항목은 절대 중복 등록하지 마세요. "
-        "만약 학생이 특정 개념을 너무 몰라서 AI가 직접 설명해 주어야 했다면, 기존의 어려운 해당 항목은 "
-        "mark_completed로 보류/해결 처리하고, 대신 이 도구를 사용해 더 상세하고 기초적인 내용으로 "
-        "새로운 학습 목표(Missing 항목)를 추가해 주세요."
+        "Registers concepts or points that the student missed or explained insufficiently in their answer to the Missing list. "
+        "Call this tool for every part you judge to be lacking after evaluating the student's answer. "
+        "IMPORTANT: Never register items that are already in the Missing list or are very similar. "
+        "If the student lacked so much fundamental knowledge that the AI had to directly explain a concept, "
+        "resolve the difficult existing item by putting it on hold using mark_completed, and instead use this tool to "
+        "add a new learning goal (Missing item) with more detailed and fundamental content."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "point": {
                 "type": "string",
-                "description": "누락된 개념이나 설명 부족 포인트를 한 문장으로 간결하게 작성하세요. 예: '스택의 push/pop 시간복잡도 미언급'",
+                "description": "Write the missed concept or insufficiently explained point concisely in one sentence. Example: 'Did not mention the push/pop time complexity of a stack'",
             },
         },
         "required": ["point"],
@@ -142,20 +141,20 @@ ADD_MISSING_POINT_DECLARATION = {
 MARK_COMPLETED_DECLARATION = {
     "name": "mark_completed",
     "description": (
-        "Missing 목록에 있는 항목이 해결되었을 때 호출합니다. "
-        "학생이 해당 개념을 올바르게 설명했거나, AI 튜터가 직접 설명을 완료했을 때 사용하세요. "
-        "해당 항목은 Missing에서 제거되고 Completed로 이동됩니다."
+        "Call when an item in the Missing list is resolved. "
+        "Use this when the student has successfully explained the concept or when the AI tutor has completely explained it directly. "
+        "The item will be removed from the Missing list and moved to the Completed list."
     ),
     "parameters": {
         "type": "object",
         "properties": {
             "point": {
                 "type": "string",
-                "description": "완료된 항목 — Missing 목록에 등록된 것과 정확히 같은 텍스트를 사용하세요.",
+                "description": "The completed item. Use exactly the same text as registered in the Missing list.",
             },
             "how_resolved": {
                 "type": "string",
-                "description": "어떻게 해결되었는지 간단히 설명. 예: '학생이 올바르게 설명함' 또는 'AI가 직접 설명함'",
+                "description": "A brief explanation of how it was resolved. Example: 'The student explained it correctly' or 'The AI directly explained it'",
             },
         },
         "required": ["point", "how_resolved"],
@@ -163,7 +162,7 @@ MARK_COMPLETED_DECLARATION = {
 }
 
 
-# ====== MD 파일 관리 ======
+# ====== MD File Management ======
 
 def get_session_dir(session_id: str) -> Path:
     session_dir = SESSIONS_DIR / session_id
@@ -172,7 +171,7 @@ def get_session_dir(session_id: str) -> Path:
 
 
 def save_md_files(session_id: str) -> None:
-    """Missing.md 와 Completed.md 를 디스크에 저장"""
+    """Save Missing.md and Completed.md to disk"""
     session = live_sessions.get(session_id)
     if not session:
         return
@@ -183,12 +182,12 @@ def save_md_files(session_id: str) -> None:
 
     # Missing.md
     missing_lines = ["# Missing Points\n",
-                     "_학생이 누락하거나 불충분하게 설명한 항목들_\n\n"]
+                     "_Items the student either missed or insufficiently explained_\n\n"]
     if missing_points:
         for p in missing_points:
             missing_lines.append(f"- [ ] {p}\n")
     else:
-        missing_lines.append("_(없음)_\n")
+        missing_lines.append("_(None)_\n")
 
     (session_dir / "Missing.md").write_text(
         "".join(missing_lines), encoding="utf-8"
@@ -196,7 +195,7 @@ def save_md_files(session_id: str) -> None:
 
     # Completed.md
     completed_lines = ["# Completed Points\n",
-                       "_해결되거나 AI가 직접 설명한 항목들_\n\n"]
+                       "_Items resolved by the student or explained by the AI_\n\n"]
     if completed_points:
         for entry in completed_points:
             point        = entry.get("point", "")
@@ -206,22 +205,22 @@ def save_md_files(session_id: str) -> None:
                 completed_lines.append(f"  _(→ {how_resolved})_")
             completed_lines.append("\n")
     else:
-        completed_lines.append("_(없음)_\n")
+        completed_lines.append("_(None)_\n")
 
     (session_dir / "Completed.md").write_text(
         "".join(completed_lines), encoding="utf-8"
     )
 
-    print(f"[{session_id}] MD 파일 저장됨 "
+    print(f"[{session_id}] Markdown files saved "
           f"(missing={len(missing_points)}, completed={len(completed_points)})")
 
 
-# ====== Tool 실행 함수 ======
+# ====== Tool Execution Functions ======
 
 def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
     """
-    ChromaDB에서 하이브리드 검색 수행.
-    Gemini Live의 tool_call에 대한 응답으로 사용.
+    Perform hybrid search in ChromaDB.
+    Used as response to Gemini Live's tool_call.
     """
     try:
         db = get_vector_db()
@@ -233,14 +232,14 @@ def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
         )
 
         if not results:
-            return "검색 결과가 없습니다."
+            return "No search results found."
 
         chunks = []
         for r in results:
             text = r.get("content", "")
             source = r.get("metadata", {}).get("source", "")
             if text:
-                header = f"[출처: {source}]" if source else ""
+                header = f"[Source: {source}]" if source else ""
                 chunks.append(f"{header}\n{text}" if header else text)
 
         result_text = "\n\n---\n\n".join(chunks)
@@ -248,15 +247,15 @@ def execute_search_db(query: str, keys: Optional[List[str]] = None) -> str:
         return result_text
 
     except Exception as e:
-        print(f"[Warning] [search_db] 검색 실패: {e}")
-        return f"검색 중 오류 발생: {str(e)}"
+        print(f"[Warning] [search_db] Search failed: {e}")
+        return f"Error during search: {str(e)}"
 
 
 async def _is_duplicate_point(point: str, existing_points: List[str]) -> bool:
     """
-    gemini-3.1-flash-lite-preview를 사용해 새로운 포인트가 기존 목록과
-    의미론적으로 중복인지 확인합니다.
-    API 오류 시 False를 반환해 추가를 허용합니다.
+    Checks if the new point is semantically duplicated with
+    the existing list using gemini-3.1-flash-lite-preview.
+    Returns False on API error to allow addition.
     """
     if not existing_points:
         return False
@@ -267,12 +266,12 @@ async def _is_duplicate_point(point: str, existing_points: List[str]) -> bool:
 
     existing_text = "\n".join(f"- {p}" for p in existing_points)
     prompt = (
-        "당신은 학습 포인트 중복 감지 전문가입니다.\n"
-        "아래 '새 포인트'가 '기존 목록'의 항목과 의미론적으로 동일하거나 "
-        "매우 유사한지 판단하세요. 단어가 달라도 핵심 개념이 같으면 중복입니다.\n\n"
-        f"[새 포인트]\n{point}\n\n"
-        f"[기존 목록]\n{existing_text}\n\n"
-        "중복이면 'YES', 중복이 아니면 'NO'만 답하세요. 절대 다른 말을 하지 마세요."
+        "You are an expert in detecting duplicate learning points.\n"
+        "Determine if the 'New Point' below represents the exact same or highly similar core concept "
+        "as any item in the 'Existing List'. If the core concept is the same, even if worded differently, it is a duplicate.\n\n"
+        f"[New Point]\n{point}\n\n"
+        f"[Existing List]\n{existing_text}\n\n"
+        "If it is a duplicate, answer 'YES'. If not, answer 'NO'. Do not say anything else."
     )
 
     try:
@@ -285,54 +284,54 @@ async def _is_duplicate_point(point: str, existing_points: List[str]) -> bool:
         print(f"[DuplicateCheck] '{point[:40]}...' → {answer}")
         return answer.startswith("YES")
     except Exception as e:
-        print(f"[Warning] [DuplicateCheck] 중복 체크 실패, 추가 허용: {e}")
+        print(f"[Warning] [DuplicateCheck] Check failed, allowing addition: {e}")
         return False
 
 
 async def execute_add_missing_point(session_id: str, point: str) -> str:
-    """Missing 목록에 포인트 추가 (의미론적 중복 체크 포함)"""
+    """Add point to Missing list (including semantic duplicate check)"""
     session = live_sessions.get(session_id)
     if not session:
-        return "세션을 찾을 수 없습니다."
+        return "Session not found."
 
     missing   = session.setdefault("missing_points", [])
     completed = session.setdefault("completed_points", [])
 
-    # 1) 정확한 문자열 중복 방지
+    # 1) Prevent exact string duplication
     if point in missing:
-        return f"이미 Missing 목록에 있습니다: {point}"
+        return f"Already in the Missing list: {point}"
 
-    # 2) Completed 목록에도 없는지 확인
+    # 2) Check if it's already in the Completed list
     completed_texts = [e.get("point", "") for e in completed]
     if point in completed_texts:
-        return f"이미 Completed 목록에 있습니다: {point}"
+        return f"Already in the Completed list: {point}"
 
-    # 3) 의미론적 중복 체크 (gemini-3.1-flash-lite-preview)
+    # 3) Semantic duplication check (gemini-3.1-flash-lite-preview)
     all_existing = missing + completed_texts
     is_dup = await _is_duplicate_point(point, all_existing)
     if is_dup:
-        print(f"[{session_id}] ⚠️  의미론적 중복으로 거부: {point}")
-        return f"의미론적으로 유사한 항목이 이미 존재합니다 (추가 거부): '{point}'"
+        print(f"[{session_id}] ⚠️  Rejected due to semantic duplication: {point}")
+        return f"A semantically similar item already exists (Addition rejected): '{point}'"
 
     missing.append(point)
     save_md_files(session_id)
 
-    print(f"[{session_id}] ➕ Missing 추가: {point}")
-    return f"Missing 목록에 추가됨: '{point}' (현재 {len(missing)}개)"
+    print(f"[{session_id}] ➕ Missing added: {point}")
+    return f"Added to Missing list: '{point}' (Currently {len(missing)} items)"
 
 
 def execute_mark_completed(session_id: str, point: str, how_resolved: str) -> str:
-    """Missing → Completed 이동"""
+    """Move Missing → Completed"""
     session = live_sessions.get(session_id)
     if not session:
-        return "세션을 찾을 수 없습니다."
+        return "Session not found."
 
     missing    = session.setdefault("missing_points", [])
     completed  = session.setdefault("completed_points", [])
 
     if point not in missing:
-        # 목록에 없어도 Completed에는 추가 (유연성)
-        print(f"[{session_id}] [Warning] mark_completed: Missing에 없는 항목: {point}")
+        # Append to Completed even if not in Missing list (flexibility)
+        print(f"[{session_id}] [Warning] mark_completed: Item not in Missing list: {point}")
     else:
         missing.remove(point)
 
@@ -348,7 +347,7 @@ def execute_mark_completed(session_id: str, point: str, how_resolved: str) -> st
     )
 
 
-# ====== 세션 관리 ======
+# ====== Session Management ======
 
 def create_live_session(
     student_info: Dict[str, Any],
@@ -357,7 +356,7 @@ def create_live_session(
     system_prompt_override: Optional[str] = None,
     study_goals: Optional[List[str]] = None,
 ) -> str:
-    """Live 세션 생성 후 session_id 반환"""
+    """Create Live session and return session_id"""
     session_id = str(uuid4())
 
     live_sessions[session_id] = {
@@ -375,10 +374,10 @@ def create_live_session(
         "gemini_session": None,
     }
 
-    # 초기 빈 MD 파일 생성
+    # Create initial empty MD files
     save_md_files(session_id)
 
-    print(f"[{session_id}] [Live] Live 세션 생성됨 (status=pending)")
+    print(f"[{session_id}] [Live] Live session created (status=pending)")
     return session_id
 
 
@@ -389,18 +388,18 @@ def get_live_session(session_id: str) -> Optional[Dict[str, Any]]:
 def delete_live_session(session_id: str):
     session = live_sessions.pop(session_id, None)
     if session:
-        print(f"[{session_id}] [Cleanup] Live 세션 삭제됨")
+        print(f"[{session_id}] [Cleanup] Live session deleted")
 
 
 def _append_transcript(session: Dict[str, Any], role: str, text: str):
-    """트랜스크립트에 항목 추가"""
+    """Append entry to transcript"""
     if text and text.strip():
         entry = TranscriptEntry(role=role, text=text.strip(), timestamp=time.time())
         session["transcript"].append(entry)
 
 
 def build_live_config(session: Dict[str, Any]) -> dict:
-    """Gemini Live API 연결 설정 빌드"""
+    """Build Gemini Live API connection configuration"""
     system_prompt = session["system_prompt"]
 
     exam_content      = session["exam_info"].get("content", "")
@@ -409,22 +408,22 @@ def build_live_config(session: Dict[str, Any]) -> dict:
 
     if exam_content or exam_name:
         system_prompt += (
-            f"\n\n## 시험 정보\n"
-            f"- 시험명: {exam_name}\n"
-            f"- 움제 범위/안내:\n{exam_content}"
+            f"\n\n## Exam Information\n"
+            f"- Exam Name: {exam_name}\n"
+            f"- Scope/Guide:\n{exam_content}"
         )
 
     if first_question:
         system_prompt += (
-            f"\n\n## 첫 번째 질문 (시스템 제공)\n"
-            f"세션이 시작되면 다음 질문을 학생에게 말해주세요:\n"
+            f"\n\n## First Question (System Provided)\n"
+            f"When the session starts, please verbally ask the student the following question:\n"
             f"\"{first_question}\""
         )
 
     return {
         "response_modalities": ["AUDIO"],
         "system_instruction": system_prompt,
-        # 사용자 음성 자막 + AI 음성 자막 활성화
+        # Enable user audio transcription + AI audio transcription
         "input_audio_transcription":  {},
         "output_audio_transcription": {},
         "tools": [{
@@ -437,16 +436,16 @@ def build_live_config(session: Dict[str, Any]) -> dict:
     }
 
 
-# ====== 세션 메인 루프 ======
+# ====== Session Main Loop ======
 
 async def handle_live_session(session_id: str, websocket) -> None:
     """
-    Gemini Live 세션의 메인 루프.
-    프론트엔드 WebSocket ↔ Gemini Live API 간 브리지 역할.
+    Main loop for Gemini Live session.
+    Acts as a bridge between the frontend WebSocket and Gemini Live API.
     """
     session = live_sessions.get(session_id)
     if not session:
-        await websocket.send_json({"type": "error", "message": "세션을 찾을 수 없습니다."})
+        await websocket.send_json({"type": "error", "message": "Session not found."})
         return
 
     rag_keys = session.get("rag_keys")
@@ -454,7 +453,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
 
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY가 설정되지 않았습니다."})
+        await websocket.send_json({"type": "error", "message": "GEMINI_API_KEY is not set."})
         return
 
     client = genai.Client(api_key=api_key)
@@ -469,7 +468,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
             }
         })
 
-    # 상태: pending → active
+    # Status: pending → active
     session["status"] = SessionStatus.ACTIVE
 
     try:
@@ -493,7 +492,7 @@ async def handle_live_session(session_id: str, websocket) -> None:
                         })
                         print(f"[{session_id}] [OK] Gemini Live connected (status=active)")
 
-                        # 첫 질문 시스템 주입
+                        # Inject first question from system
                         first_question = session["exam_info"].get("first_question", "")
                         if first_question:
                             await _inject_first_question(session_id, gemini_session, first_question)
@@ -502,30 +501,30 @@ async def handle_live_session(session_id: str, websocket) -> None:
                             if goals:
                                 await _inject_dynamic_first_question(session_id, gemini_session, goals)
                             else:
-                                await _inject_first_question(session_id, gemini_session, "안녕하세요! 오늘 어떤 대화를 나눠볼까요?")
+                                await _inject_first_question(session_id, gemini_session, "Hello! What shall we talk about today?")
                         is_first_connection = False
                     else:
-                        print(f"[{session_id}] [Reconnect] Gemini Live 빈번한 끊김으로 서버 핫 재연결을 시도했습니다.")
+                        print(f"[{session_id}] [Reconnect] Attempting hot-reconnect to server due to frequent Gemini Live disconnections.")
                         
-                        # 1. 이전 트랜스크립트 불러오기 (최신 10개만 유지해서 너무 길어지지 않게)
+                        # 1. Load previous transcript (keep only latest 10 to avoid excessive length)
                         recent_history = session.get("transcript", [])[-10:]
-                        history_text = "이전 대화 내역:\n"
+                        history_text = "Previous conversation history:\n"
                         for entry in recent_history:
-                            role_name = "학습자" if "user" in entry.role else "AI 튜터"
+                            role_name = "Student" if "user" in entry.role else "AI Tutor"
                             history_text += f"{role_name}: {entry.text}\n"
                         
-                        # 2. 재연결시 문맥 복원용 프롬프트 전송
+                        # 2. Send prompt to restore context upon reconnection
                         recovery_prompt = (
-                            f"시스템 안내: 네트워크 문제로 연결이 잠시 끊어졌다 복구되었습니다. "
-                            f"학생은 중간에 끊긴 사실을 모릅니다. 절대 이에 대해 사과하거나 언급하지 마세요.\n\n"
+                            f"System instructions: The connection was briefly lost due to a network issue and has now been restored. "
+                            f"The student is unaware of this interruption. Do NOT apologize or mention it under any circumstances.\n\n"
                             f"{history_text}\n"
-                            f"위 대화 내역을 바탕으로 맥락을 유지하면서, 학습자가 마지막으로 했던 답변에 이어서 자연스럽게 반응해주세요."
+                            f"Based on the conversation history above, maintain the context and respond naturally to the student's last input."
                         )
                         await gemini_session.send_client_content(
                             turns={"parts": [{"text": recovery_prompt}]},
                             turn_complete=True,
                         )
-                        print(f"[{session_id}] [Reconnect] 이전 대화 내역을 Gemini에게 주입 완료했습니다.")
+                        print(f"[{session_id}] [Reconnect] Successfully injected previous conversation history to Gemini.")
 
                     async with asyncio.TaskGroup() as tg:
                         tg.create_task(_forward_client_to_gemini(session_id, websocket, gemini_session, session))
@@ -538,8 +537,8 @@ async def handle_live_session(session_id: str, websocket) -> None:
                 print(f"[{session_id}] [Error] Gemini Live error or disconnected: {err_msg}")
                 if not session.get("active", True):
                     break
-                # 비정상 종료 시 재연결 시도 (1초 대기 후)
-                print(f"[{session_id}] [Reconnect] 1초 뒤 재연결 시도...")
+                # Attempt reconnection upon abnormal termination (after 1 second delay)
+                print(f"[{session_id}] [Reconnect] Attempting reconnect in 1 second...")
                 await asyncio.sleep(1)
 
     except asyncio.CancelledError:
@@ -551,25 +550,25 @@ async def handle_live_session(session_id: str, websocket) -> None:
     finally:
         _finish_session(session_id)
         try:
-            await websocket.send_json({"type": "session_end", "reason": "finished", "message": "세션이 종료되었습니다."})
+            await websocket.send_json({"type": "session_end", "reason": "finished", "message": "The session has ended."})
         except Exception:
             pass
-        print(f"[{session_id}] [Closed] Gemini Live 연결 및 루프 완전히 종료됨")
+        print(f"[{session_id}] [Closed] Gemini Live connection and loop completely terminated")
 
 
 def _finish_session(session_id: str):
-    """세션 종료 처리"""
+    """Handle session termination"""
     session = live_sessions.get(session_id)
     if session:
         session["status"]       = SessionStatus.COMPLETED
         session["active"]       = False
         session["ended_at"]     = time.time()
         session["gemini_session"] = None
-        # 최종 MD 파일 저장
+        # Save final MD files
         save_md_files(session_id)
 
 
-# ====== 첫 질문 주입 ======
+# ====== Inject First Question ======
 
 async def _inject_first_question(
     session_id: str,
@@ -577,21 +576,21 @@ async def _inject_first_question(
     first_question: str,
 ) -> None:
     """
-    세션 시작 시 시스템이 첫 번째 질문을 Gemini에 주입.
-    Gemini는 이 텍스트를 받아 음성으로 학생에게 질문한다.
+    System injects the first question into Gemini when the session starts.
+    Gemini receives this text and asks the student verbally.
     """
     instruction = (
-        f"지금 학생에게 다음 질문을 음성으로 말해주세요. "
-        f"질문 외에 다른 말은 하지 마세요:\n\n\"{first_question}\""
+        f"Right now, please verbally ask the student the following question. "
+        f"Do not say anything else besides this question:\n\n\"{first_question}\""
     )
     try:
         await gemini_session.send_client_content(
             turns={"parts": [{"text": instruction}]},
             turn_complete=True,
         )
-        print(f"[{session_id}] [Msg] 첫 질문 주입됨: {first_question[:50]}...")
+        print(f"[{session_id}] [Msg] First question injected: {first_question[:50]}...")
     except Exception as e:
-        print(f"[{session_id}] [Warning] 첫 질문 주입 실패: {e}")
+        print(f"[{session_id}] [Warning] Failed to inject first question: {e}")
 
 
 async def _inject_dynamic_first_question(
@@ -600,27 +599,27 @@ async def _inject_dynamic_first_question(
     goals: List[str],
 ) -> None:
     """
-    세션 시작 시 시스템이 학습 목표를 기반으로 
-    첫 질문을 동적으로 생성하도록 Gemini에 주입.
+    System injects dynamic first question instructions into Gemini 
+    based on learning goals when the session starts.
     """
     goals_text = "\n".join([f"- {g}" for g in goals])
     instruction = (
-        f"학생에게 환영 인사를 건네고, 다음 학습 목표들 중 하나에 대해 생각해보게 하는 흥미롭고 자연스러운 첫 질문을 던져주세요. "
-        f"'이 문서를 기준으로 학습을 시작하겠습니다' 혹은 '무엇부터 시작할까요?'와 같은 딱딱하거나 일반적인 말은 절대 하지 말고, "
-        f"목표와 관련된 구체적인 개념을 바로 화두로 던지세요.\n\n"
-        f"[학습 목표]\n{goals_text}"
+        f"Greet the student, and ask an engaging and natural first question to make them think about one of the following learning goals. "
+        f"NEVER use stiff or generic openings like 'Let's start learning based on this document' or 'What should we start with?'. "
+        f"Instead, immediately toss a specific concept related to a goal as a conversation starter.\n\n"
+        f"[Learning Goals]\n{goals_text}"
     )
     try:
         await gemini_session.send_client_content(
             turns={"parts": [{"text": instruction}]},
             turn_complete=True,
         )
-        print(f"[{session_id}] [Msg] 동적 첫 질문 주입됨")
+        print(f"[{session_id}] [Msg] Dynamic first question injected")
     except Exception as e:
-        print(f"[{session_id}] [Warning] 동적 첫 질문 주입 실패: {e}")
+        print(f"[{session_id}] [Warning] Failed to inject dynamic first question: {e}")
 
 
-# ====== 내부 태스크 ======
+# ====== Internal Tasks ======
 
 async def _forward_client_to_gemini(
     session_id: str,
@@ -628,30 +627,30 @@ async def _forward_client_to_gemini(
     gemini_session,
     session: Dict[str, Any],
 ) -> None:
-    """클라이언트 → Gemini: 오디오 바이너리 & 텍스트 메시지 포워딩"""
+    """Client → Gemini: Forward audio binaries & text messages"""
     import base64
     try:
         while True:
             message = await websocket.receive()
 
             if message["type"] == "websocket.disconnect":
-                print(f"[{session_id}] 클라이언트 연결 해제")
+                print(f"[{session_id}] Client disconnected")
                 break
 
-            # 바이너리 지원 (레거시)
+            # Binary support (Legacy)
             if "bytes" in message and message["bytes"]:
                 await gemini_session.send_realtime_input(
                     audio={"data": message["bytes"], "mime_type": "audio/pcm;rate=16000"}
                 )
 
-            # 텍스트 JSON payload
+            # Text JSON payload
             elif "text" in message and message["text"]:
                 try:
                     msg = json.loads(message["text"])
                     msg_type = msg.get("type", "")
 
                     if msg_type == "end":
-                        print(f"[{session_id}] 클라이언트 세션 종료 요청")
+                        print(f"[{session_id}] Client requested session end")
                         session["active"] = False
                         raise asyncio.CancelledError("Client ended session")
 
@@ -666,7 +665,7 @@ async def _forward_client_to_gemini(
                             
                     elif msg_type == "end_turn":
                         # The user manually stopped the mic, so compel the AI to start speaking
-                        print(f"[{session_id}] [Stop] 클라이언트 마이크 중지. 턴 종료 전송.")
+                        print(f"[{session_id}] [Stop] Client microphone stopped. Sending turn_complete.")
                         await gemini_session.send_client_content(turn_complete=True)
 
                     elif msg_type == "text":
@@ -682,7 +681,7 @@ async def _forward_client_to_gemini(
     except asyncio.CancelledError:
         raise
     except Exception as e:
-        print(f"[{session_id}] [Warning] 클라이언트->Gemini 포워딩 오류(클라이언트 종료 등): {e}")
+        print(f"[{session_id}] [Warning] Client->Gemini forwarding error: {e}")
         session["active"] = False
         raise asyncio.CancelledError("Client websocket issue")
 
@@ -694,28 +693,28 @@ async def _forward_gemini_to_client(
     rag_keys: Optional[List[str]],
     session: Dict[str, Any],
 ) -> None:
-    """Gemini → 클라이언트: 오디오 응답 & tool_call 처리"""
+    """Gemini → Client: Forward audio responses & process tool_calls"""
     try:
         while True:
             turn = gemini_session.receive()
             async for response in turn:
 
-                # 1) 오디오 → 클라이언트로 바이너리 전송
+                # 1) Audio → send binary to client
                 if response.data is not None:
                     await websocket.send_bytes(response.data)
 
-                # 2) Tool Call → 실행 → tool_response 전송
+                # 2) Tool Call → Execute → send tool_response
                 elif response.tool_call:
                     await _handle_tool_calls(
                         session_id, gemini_session, websocket,
                         response.tool_call, rag_keys,
                     )
 
-                # 3) 서버 컨텐츠 (트랜스크립트, 턴 완료)
+                # 3) Server Content (transcript, turn complete)
                 elif response.server_content:
                     sc = response.server_content
 
-                    # 사용자 음성 자막 (input_audio_transcription)
+                    # User voice transcription (input_audio_transcription)
                     if hasattr(sc, "input_transcription") and sc.input_transcription:
                         text = getattr(sc.input_transcription, "text", None)
                         if text and text.strip():
@@ -725,11 +724,11 @@ async def _forward_gemini_to_client(
                                 "text": text,
                             })
 
-                    # AI 음성 자막 (output_audio_transcription)
+                    # AI voice transcription (output_audio_transcription)
                     if hasattr(sc, "output_transcription") and sc.output_transcription:
                         text = getattr(sc.output_transcription, "text", None)
                         if text:
-                            # 필터링: 제어 토큰 및 툴 이름 발화 제거
+                            # Filtering: Remove control tokens and tool names from speech
                             text = re.sub(r'<ctrl\d+>', '', text)
                             text = text.replace('search_db()', '').replace('search_db', '')
                             text = text.replace('add_missing_point()', '').replace('add_missing_point', '')
@@ -742,9 +741,9 @@ async def _forward_gemini_to_client(
                                 "text": text,
                             })
 
-                    # model_turn 텍스트는 Extended Thinking 내부 추론이라 표시 안 함
-                    # (WARNING: non-data parts ['thought','text'] 원인)
-                    # _append_transcript 에만 남기고 프론트에는 보내지 않음
+                    # The model_turn text is internal reasoning for Extended Thinking, so do not display it
+                    # (WARNING: CAUSES non-data parts ['thought','text'])
+                    # Leave it ONLY in _append_transcript and do not send it to the frontend
                     if sc.model_turn:
                         for part in sc.model_turn.parts:
                             if hasattr(part, "text") and part.text:
@@ -754,16 +753,16 @@ async def _forward_gemini_to_client(
                         await websocket.send_json({"type": "turn_complete"})
                     
                     if getattr(sc, "interrupted", False):
-                        print(f"[{session_id}] [Interrupt] Gemini Live가 사용자 발화로 중단됨")
+                        print(f"[{session_id}] [Interrupt] Gemini Live interrupted by user speech")
                         await websocket.send_json({"type": "interrupted"})
 
     except asyncio.CancelledError:
         raise
     except Exception as e:
         err_msg = str(e)
-        print(f"[{session_id}] [Warning] Gemini->클라이언트 포워딩 오류: {err_msg}")
-        # 오류를 던져 TaskGroup이 이를 취소하고 재연결 루프로 넘어가도록 함.
-        # 비정상 종료 시 클라이언트 연결 종료 패킷을 보내지 않음
+        print(f"[{session_id}] [Warning] Gemini->Client forwarding error: {err_msg}")
+        # Throw the error so TaskGroup cancels it and proceeds to the reconnect loop.
+        # Do not send client disconnection packets upon abnormal termination
         raise e
 
 
@@ -774,7 +773,7 @@ async def _handle_tool_calls(
     tool_call,
     rag_keys: Optional[List[str]] = None,
 ) -> None:
-    """Gemini의 tool_call을 처리하고 결과를 돌려보냄"""
+    """Process Gemini's tool_call and send response back"""
     function_responses = []
     loop = asyncio.get_running_loop()
 
@@ -787,7 +786,7 @@ async def _handle_tool_calls(
             "data": {"tool": fc.name, "args": dict(fc.args)},
         })
 
-        # ── 도구별 실행 ──
+        # ── Tool-specific execution ──
         if fc.name == "search_db":
             query = fc.args.get("query", "")
             result_text = await loop.run_in_executor(
@@ -798,7 +797,7 @@ async def _handle_tool_calls(
             point = fc.args.get("point", "")
             result_text = await execute_add_missing_point(session_id, point)
 
-            # 프론트엔드에 Missing 목록 변경 알림
+            # Notify frontend of Missing list change
             session = live_sessions.get(session_id)
             if session:
                 await websocket.send_json({
@@ -814,7 +813,7 @@ async def _handle_tool_calls(
             how_resolved = fc.args.get("how_resolved", "")
             result_text = execute_mark_completed(session_id, point, how_resolved)
 
-            # 프론트엔드에 Completed 목록 변경 알림
+            # Notify frontend of Completed list change
             session = live_sessions.get(session_id)
             if session:
                 await websocket.send_json({
@@ -825,24 +824,24 @@ async def _handle_tool_calls(
                     },
                 })
 
-                # 모든 학습 목표 달성 시 → Gemini가 마무리 멘트 후 세션 종료
+                # When all goals achieved → Gemini wraps up and ends session
                 if not session.get("missing_points"):
-                    print(f"[{session_id}] 🎉 모든 학습 목표 달성 — 세션 종료 예약")
+                    print(f"[{session_id}] 🎉 All learning goals achieved — scheduling session end")
                     try:
                         await gemini_session.send_client_content(
                             turns={"parts": [{"text": (
-                                "모든 학습 목표가 완료되었습니다. "
-                                "학생에게 '모든 내용을 학습하셨네요! 오늘 수고하셨습니다.' 라고 "
-                                "따뜻하게 마무리 인사를 해주세요. 그 이상의 질문은 하지 마세요."
+                                "All learning goals have been completed. "
+                                "Please warmly wrap up the session saying 'You've learned everything! Great job today.' "
+                                "Do not ask any more questions."
                             )}]},
                             turn_complete=True,
                         )
                     except Exception as e:
-                        print(f"[{session_id}] [Warning] 마무리 멘트 주입 실패: {e}")
+                        print(f"[{session_id}] [Warning] Failed to inject wrap-up instruction: {e}")
                     session["active"] = False
 
         else:
-            result_text = f"알 수 없는 도구: {fc.name}"
+            result_text = f"Unknown tool: {fc.name}"
 
         function_responses.append(types.FunctionResponse(
             id=fc.id,
@@ -857,20 +856,20 @@ async def _handle_tool_calls(
         })
 
     await gemini_session.send_tool_response(function_responses=function_responses)
-    print(f"[{session_id}] [OK] Tool Response 전송 완료 ({len(function_responses)}개)")
+    print(f"[{session_id}] [OK] Tool Response sent ({len(function_responses)} items)")
 
 
 def _tool_start_message(tool_name: str) -> str:
     return {
-        "search_db":         "학습 자료 검색 중...",
-        "add_missing_point": "누락 포인트 기록 중...",
-        "mark_completed":    "완료 항목 처리 중...",
-    }.get(tool_name, f"도구 실행 중: {tool_name}")
+        "search_db":         "Searching learning materials...",
+        "add_missing_point": "Recording missing points...",
+        "mark_completed":    "Processing completed items...",
+    }.get(tool_name, f"Running tool: {tool_name}")
 
 
 def _tool_end_message(tool_name: str) -> str:
     return {
-        "search_db":         "검색 완료. 응답 생성 중...",
-        "add_missing_point": "Missing.md 업데이트됨.",
-        "mark_completed":    "Completed.md 업데이트됨.",
-    }.get(tool_name, f"도구 완료: {tool_name}")
+        "search_db":         "Search complete. Generating response...",
+        "add_missing_point": "Missing.md updated.",
+        "mark_completed":    "Completed.md updated.",
+    }.get(tool_name, f"Tool complete: {tool_name}")

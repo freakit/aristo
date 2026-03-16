@@ -8,9 +8,9 @@ const options = {
     info: {
       title: "AI Tutor API",
       version: "2.0.0",
-      description: "AI Tutor 백엔드 API (Firebase + Gemini Live)",
+      description: "AI Tutor Backend API (Firebase + Gemini Live)",
     },
-    servers: [{ url: "http://localhost:3001", description: "로컬 개발 서버" }],
+    servers: [{ url: "http://localhost:3001", description: "Local development server" }],
     components: {
       securitySchemes: {
         BearerAuth: {
@@ -18,19 +18,19 @@ const options = {
           scheme: "bearer",
           bearerFormat: "Firebase ID Token",
           description:
-            "Firebase Auth ID Token. 프론트에서 auth.currentUser.getIdToken()으로 발급",
+            "Firebase Auth ID Token. Issued via auth.currentUser.getIdToken() on the frontend",
         },
       },
     },
     tags: [
-      { name: "Auth", description: "Firebase 기반 인증 API" },
-      { name: "RAG", description: "학습 자료 업로드 및 관리" },
-      { name: "Sessions", description: "튜터링 세션 및 메시지" },
+      { name: "Auth", description: "Firebase-based authentication API" },
+      { name: "RAG", description: "Learning material upload and management" },
+      { name: "Sessions", description: "Tutoring sessions and messages" },
       {
         name: "AI Proxy",
-        description: "Python AI 서버 프록시 (WebSocket 전환 예정)",
+        description: "Python AI server proxy (WebSocket migration planned)",
       },
-      { name: "Python", description: "Python 서버 연동" },
+      { name: "Python", description: "Python server integration" },
     ],
   },
   apis: ["./routes/*.js"],

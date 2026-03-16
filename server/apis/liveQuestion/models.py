@@ -1,5 +1,5 @@
 """
-Gemini Live Q&A API의 요청/응답 모델
+Gemini Live Q&A API request/response models
 """
 
 import time
@@ -8,27 +8,27 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 
-# ====== 세션 상태 ======
+# ====== Session Status ======
 
 class SessionStatus(str, Enum):
-    PENDING   = "pending"    # WebSocket 미연결
-    ACTIVE    = "active"     # 음성 대화 진행 중
-    COMPLETED = "completed"  # 세션 종료
+    PENDING   = "pending"    # WebSocket not connected
+    ACTIVE    = "active"     # Voice conversation in progress
+    COMPLETED = "completed"  # Session ended
 
 
-# ====== 트랜스크립트 ======
+# ====== Transcript ======
 
 class TranscriptEntry(BaseModel):
-    """대화 기록 한 줄"""
+    """A single line of conversation history"""
     role: str          # "ai" | "user_text"
     text: str
     timestamp: float = Field(default_factory=time.time)
 
 
-# ====== 세션 생성 요청 ======
+# ====== Create Session Request ======
 
 class LiveSessionStartRequest(BaseModel):
-    """Live 세션 시작 요청"""
+    """Live session start request"""
     student_info: Dict[str, Any] = Field(default_factory=dict)
     exam_info: Dict[str, Any] = Field(default_factory=dict)
     rag_keys: Optional[List[str]] = None
@@ -36,29 +36,29 @@ class LiveSessionStartRequest(BaseModel):
     study_goals: Optional[List[str]] = None
 
 
-# ====== 세션 생성 응답 ======
+# ====== Create Session Response ======
 
 class LiveSessionStartResponse(BaseModel):
-    """Live 세션 시작 응답"""
+    """Live session start response"""
     session_id: str
     status: SessionStatus = SessionStatus.PENDING
-    message: str = "세션이 생성되었습니다. WebSocket으로 연결하세요."
+    message: str = "Session created. Please connect via WebSocket."
     ws_url: str
 
 
-# ====== WebSocket 메시지 (서버 → 클라이언트) ======
+# ====== WebSocket Message (Server -> Client) ======
 
 class LiveMessageToClient(BaseModel):
-    """서버에서 클라이언트로 보내는 JSON 메시지"""
+    """JSON message sent from server to client"""
     type: str  # "ready" | "transcript" | "error" | "session_end" | "tool_call_start" | "tool_call_end" | "turn_complete"
     message: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
 
 
-# ====== 세션 조회 응답 ======
+# ====== Get Session Response ======
 
 class LiveSessionInfoResponse(BaseModel):
-    """세션 정보 응답"""
+    """Session info response"""
     session_id: str
     status: SessionStatus
     student_info: Dict[str, Any] = Field(default_factory=dict)
@@ -69,20 +69,20 @@ class LiveSessionInfoResponse(BaseModel):
     transcript_count: int = 0
 
 
-# ====== 트랜스크립트 응답 ======
+# ====== Transcript Response ======
 
 class TranscriptResponse(BaseModel):
-    """세션 대화 기록 응답"""
+    """Session conversation history response"""
     session_id: str
     status: SessionStatus
     transcript: List[TranscriptEntry]
     total: int
 
 
-# ====== 세션 결과 응답 ======
+# ====== Session Result Response ======
 
 class SessionResultResponse(BaseModel):
-    """세션 최종 결과 응답"""
+    """Session final result response"""
     session_id: str
     status: SessionStatus
     student_info: Dict[str, Any]
@@ -95,9 +95,9 @@ class SessionResultResponse(BaseModel):
     ended_at: Optional[float] = None
 
 
-# ====== 세션 목록 응답 ======
+# ====== Session List Response ======
 
 class LiveSessionListResponse(BaseModel):
-    """활성 세션 목록 응답"""
+    """Active session list response"""
     sessions: List[LiveSessionInfoResponse]
     total: int

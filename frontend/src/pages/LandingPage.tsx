@@ -3,6 +3,7 @@ import styled from 'styled-components'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
 import { theme } from '../styles/theme'
+import aristoLogo from '../assets/Aristo_logo_nobg.png'
 
 const Page = styled.div`
   background: #050505;
@@ -32,18 +33,9 @@ const HeaderLeft = styled.div`
   flex: 1;
 `
 
-const LogoMark = styled.div`
+const LogoImage = styled.img`
   width: 32px; height: 32px;
-  border: 1.5px solid rgba(255,255,255,0.85);
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: ${theme.fonts.display};
-  font-size: 17px;
-  font-style: italic;
-  font-weight: 300;
-  color: #ffffff;
+  object-fit: contain;
 `
 
 const LogoText = styled.span`
@@ -427,7 +419,7 @@ export const LandingPage: React.FC = () => {
       navigate('/upload')
     } catch (err: any) {
       if (err.code !== 'auth/popup-closed-by-user') {
-        console.error('Google 로그인 오류:', err)
+        console.error('Google sign-in error:', err)
       }
     } finally {
       setSigningIn(false)
@@ -440,13 +432,13 @@ export const LandingPage: React.FC = () => {
 
       <Header>
         <HeaderLeft>
-          <LogoMark>A</LogoMark>
+          <LogoImage src={aristoLogo} alt="Aristo Logo" />
           <LogoText>Aristo</LogoText>
         </HeaderLeft>
         <HeaderRight>
           <GoogleBtn onClick={handleLogin} disabled={signingIn}>
             <GoogleIcon />
-            {signingIn ? '로그인 중...' : 'Google로 시작하기'}
+            {signingIn ? 'Signing in...' : 'Start with Google'}
           </GoogleBtn>
         </HeaderRight>
       </Header>
@@ -464,7 +456,7 @@ export const LandingPage: React.FC = () => {
         <CTARow>
           <GoogleBtn onClick={handleLogin} disabled={signingIn} style={{ padding: '15px 36px', fontSize: '16px' }}>
             <GoogleIcon />
-            {signingIn ? '로그인 중...' : 'Google로 무료 시작'}
+            {signingIn ? 'Signing in...' : 'Start Free with Google'}
           </GoogleBtn>
         </CTARow>
       </Hero>

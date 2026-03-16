@@ -1,14 +1,14 @@
 /**
- * api.ts — 공통 API 헬퍼
+ * api.ts — Common API Helper
  *
- * Firebase ID Token을 자동으로 Authorization: Bearer <token> 헤더에 주입합니다.
- * Firebase 유저가 없는 경우(더미 로그인)엔 토큰 없이 요청합니다.
+ * Automatically injects Firebase ID Token into Authorization: Bearer <token> header.
+ * If no Firebase user (dummy login), sends request without token.
  */
 import { firebaseAuth } from './firebase'
 
 const API_BASE = '/api'
 
-/** Firebase ID Token 획득 (없으면 null) */
+/** Get Firebase ID Token (returns null if unavailable) */
 async function getToken(): Promise<string | null> {
   const user = firebaseAuth.currentUser
   if (!user) return null
@@ -19,7 +19,7 @@ async function getToken(): Promise<string | null> {
   }
 }
 
-/** 공통 fetch 래퍼 */
+/** Common fetch wrapper */
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -73,8 +73,8 @@ export const api = {
 }
 
 /**
- * SSE(Server-Sent Events) 연결 헬퍼
- * @returns cleanup 함수 (EventSource를 닫음)
+ * SSE (Server-Sent Events) connection helper
+ * @returns cleanup function (closes EventSource)
  */
 export function openSSE(
   path: string,
@@ -88,8 +88,8 @@ export function openSSE(
 }
 
 /**
- * WebSocket 연결 헬퍼 (/ws/tutor)
- * Firebase 토큰이 있으면 ?token=<idToken> 쿼리파라미터로 전달
+ * WebSocket connection helper (/ws/tutor)
+ * Passes Firebase token as ?token=<idToken> query param if available
  */
 export async function openTutorWS(): Promise<WebSocket> {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
@@ -102,7 +102,7 @@ export async function openTutorWS(): Promise<WebSocket> {
 }
 
 // ──────────────────────────────────────────────────────────
-// 튜터 모드 API
+// Tutor mode API
 // ──────────────────────────────────────────────────────────
 
 export interface TutorStartResponse {
@@ -134,7 +134,7 @@ export interface TutorEndResponse {
   total_turns: number
 }
 
-/** 튜터 세션 시작 — AI가 주제를 설명하고 첫 질문을 반환 */
+/** Start tutor session — AI explains the topic and returns the first question */
 export function startTutor(
   topic: string,
   options?: { vectorDocIds?: string[]; sessionId?: string }
@@ -146,7 +146,7 @@ export function startTutor(
   })
 }
 
-/** 학생 답변 제출 → 피드백 + 보충 + 다음 질문 */
+/** Submit student answer → feedback + supplement + next question */
 export function replyTutor(
   sessionId: string,
   answer: string
@@ -157,7 +157,7 @@ export function replyTutor(
   })
 }
 
-/** 튜터 세션 종료 → 학습 요약 반환 */
+/** End tutor session → return learning summary */
 export function endTutor(sessionId: string): Promise<TutorEndResponse> {
   return api.post<TutorEndResponse>('/tutor/end', {
     session_id: sessionId,

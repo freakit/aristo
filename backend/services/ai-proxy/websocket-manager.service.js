@@ -57,7 +57,7 @@ class AIWebSocketManager {
         const currentWs = this.ws;
         this.ws = null;
 
-        // ⭐ 모든 이벤트 리스너 제거 (중요!)
+        // ⭐ Remove all event listeners (important!)
         currentWs.removeAllListeners();
 
         if (currentWs.readyState === WebSocket.OPEN) {
@@ -119,7 +119,7 @@ class AIWebSocketManager {
           }
         });
 
-        // ⭐ 개선된 에러 핸들러
+        // ⭐ Improved error handler
         this.ws.on("error", (error) => {
           clearTimeout(connectionTimeout);
           logger.error(
@@ -129,13 +129,13 @@ class AIWebSocketManager {
               address: error.address,
               port: error.port,
             },
-            "WebSocket 오류",
+            "WebSocket error",
           );
 
           this.isConnecting = false;
           this.handleConnectionError(error);
 
-          // reject만 호출하고 throw 하지 않음
+          // Only calls reject, does not throw
           reject(new Error(`WebSocket error: ${error.message}`));
         });
 
@@ -143,7 +143,7 @@ class AIWebSocketManager {
           clearTimeout(connectionTimeout);
           logger.info(
             { code, reason: reason?.toString() },
-            "WebSocket 연결 종료",
+            "WebSocket connection closed",
           );
           this.isConnecting = false;
           this.cleanup();
@@ -258,7 +258,7 @@ class AIWebSocketManager {
 
       let messagePayload;
       if (isSessionStart) {
-        // ⬇️ 세션 시작 시에만 첨부 동봉
+        // ⬇️ Attach documents only at session start
         messagePayload = {
           type: "test_start",
           id: messageId,
@@ -272,7 +272,7 @@ class AIWebSocketManager {
       } else if (isSessionEnd) {
         messagePayload = { type: "end", id: messageId };
       } else if (userInput === "CONTINUE_SESSION") {
-        // ⬇️ 세션 재개 - 정보 포함 + 답변 포함
+        // ⬇️ Session resume - include info + answer
         messagePayload = {
           type: "continue_session",
           id: messageId,
